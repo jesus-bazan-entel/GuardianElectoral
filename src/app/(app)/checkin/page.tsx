@@ -29,6 +29,7 @@ export default function CheckinPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [adjustedPosition, setAdjustedPosition] = useState<GeoPosition | null>(null);
+  const [savingLocation, setSavingLocation] = useState(false);
 
   useEffect(() => {
     requestPosition();
@@ -98,6 +99,26 @@ export default function CheckinPage() {
     setAdjustedPosition(newPos);
   }
 
+  async function handleSaveAdjustedLocation() {
+    if (!adjustedPosition || !lastAction?.localId) return;
+    setSavingLocation(true);
+    try {
+      await db.checkins.update(lastAction.localId, {
+        lat: adjustedPosition.lat,
+        lng: adjustedPosition.lng,
+        accuracyMeters: 0,
+        syncStatus: "pending",
+      });
+      await loadHistory();
+      setSuccess("Ubicación actualizada correctamente");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error("Error al guardar ubicación:", err);
+    } finally {
+      setSavingLocation(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -155,16 +176,32 @@ export default function CheckinPage() {
               accuracy={wasManuallyAdjusted ? undefined : finalPosition.accuracy}
             />
             {wasManuallyAdjusted && (
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-xs text-primary-600 font-medium">
-                  Ubicación ajustada manualmente
-                </p>
-                <button
-                  onClick={() => { if (position) setAdjustedPosition(position); }}
-                  className="text-xs text-gray-500 hover:text-gray-700 underline"
+              <div className="mt-3 space-y-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full"
+                  onClick={handleSaveAdjustedLocation}
+                  loading={savingLocation}
+                  disabled={!lastAction}
                 >
-                  Restaurar GPS
-                </button>
+                  <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Guardar ubicación ajustada
+                </Button>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-primary-600 font-medium">
+                    Nueva: {adjustedPosition?.lat.toFixed(6)}, {adjustedPosition?.lng.toFixed(6)}
+                  </p>
+                  <button
+                    onClick={() => { if (position) setAdjustedPosition(position); }}
+                    className="text-xs text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Restaurar GPS
+                  </button>
+                </div>
               </div>
             )}
           </div>
