@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { db, type LocalActa } from "@/lib/db/indexed-db";
 import { useSync } from "@/hooks/useSync";
+import { retryErrors } from "@/lib/sync";
 import Link from "next/link";
 
 export default function ActaListPage() {
@@ -197,6 +198,25 @@ export default function ActaListPage() {
                     </Badge>
                   </div>
                 </div>
+                {acta.syncStatus === "error" && (
+                  <div className="mt-2 pt-2 border-t border-red-100 flex items-start justify-between gap-2">
+                    <p className="text-xs text-red-600 flex-1">
+                      {acta.syncError || "Error al sincronizar. Intenta de nuevo."}
+                    </p>
+                    <button
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        await db.actas.update(acta.localId!, { syncStatus: "pending", syncError: undefined });
+                        await doSync();
+                        loadActas();
+                      }}
+                      className="text-xs text-primary-600 font-semibold whitespace-nowrap hover:underline"
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                )}
               </Card>
             </Link>
           ))}
