@@ -189,66 +189,27 @@ export default function RegisterPage() {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">PIN</label>
-                <div className="flex gap-1.5 justify-center">
-                  {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-11 h-14 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-colors ${
-                        pin.length > i
-                          ? "border-primary-500 bg-primary-50 text-primary-700"
-                          : "border-gray-200 bg-gray-50"
-                      }`}
-                    >
-                      {pin[i] || ""}
-                    </div>
-                  ))}
-                </div>
-                <input
-                  type="tel"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
-                  className="sr-only"
-                  id="pin-create"
-                  inputMode="numeric"
-                  autoFocus
-                />
-                <label htmlFor="pin-create" className="block text-center text-xs text-primary-600 mt-2 cursor-pointer">
-                  Toca para ingresar PIN
-                </label>
-              </div>
+              <Input
+                label="PIN (6 dígitos)"
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
+                placeholder="Ingresa 6 dígitos"
+                inputMode="numeric"
+                maxLength={PIN_LENGTH}
+                autoFocus
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Confirmar PIN</label>
-                <div className="flex gap-1.5 justify-center">
-                  {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-11 h-14 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-colors ${
-                        pinConfirm.length > i
-                          ? pin[i] === pinConfirm[i]
-                            ? "border-green-500 bg-green-50 text-green-700"
-                            : "border-red-500 bg-red-50 text-red-700"
-                          : "border-gray-200 bg-gray-50"
-                      }`}
-                    >
-                      {pinConfirm[i] ? "\u2022" : ""}
-                    </div>
-                  ))}
-                </div>
-                <input
-                  type="tel"
-                  value={pinConfirm}
-                  onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
-                  className="sr-only"
-                  id="pin-confirm"
-                  inputMode="numeric"
-                />
-                <label htmlFor="pin-confirm" className="block text-center text-xs text-primary-600 mt-2 cursor-pointer">
-                  Toca para confirmar PIN
-                </label>
-              </div>
+              <Input
+                label="Confirmar PIN"
+                type="password"
+                value={pinConfirm}
+                onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
+                placeholder="Repite los 6 dígitos"
+                inputMode="numeric"
+                maxLength={PIN_LENGTH}
+                error={pinConfirm.length === PIN_LENGTH && pin !== pinConfirm ? "Los PINs no coinciden" : undefined}
+              />
 
               <div className="bg-amber-50 rounded-lg p-3">
                 <p className="text-xs text-amber-800">

@@ -98,44 +98,16 @@ export default function LoginPage() {
               maxLength={15}
             />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                PIN de acceso
-              </label>
-              <div className="flex gap-1.5 justify-center">
-                {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`w-11 h-14 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-colors ${
-                      pin.length > i
-                        ? "border-primary-500 bg-primary-50 text-primary-700"
-                        : "border-gray-200 bg-gray-50 text-gray-300"
-                    }`}
-                  >
-                    {pin[i] ? "\u2022" : ""}
-                  </div>
-                ))}
-              </div>
-              <input
-                type="tel"
-                value={pin}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH);
-                  setPin(val);
-                }}
-                className="sr-only"
-                id="pin-input"
-                autoComplete="one-time-code"
-                inputMode="numeric"
-                maxLength={PIN_LENGTH}
-              />
-              <label
-                htmlFor="pin-input"
-                className="block text-center text-xs text-primary-600 mt-2 cursor-pointer"
-              >
-                Toca aquí para ingresar PIN
-              </label>
-            </div>
+            <Input
+              label="PIN de acceso"
+              type="password"
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH))}
+              placeholder="Ingresa tu PIN de 6 dígitos"
+              inputMode="numeric"
+              maxLength={PIN_LENGTH}
+              autoComplete="one-time-code"
+            />
 
             {error && (
               <p className="text-sm text-red-600 bg-red-50 p-2.5 rounded-lg text-center">{error}</p>
