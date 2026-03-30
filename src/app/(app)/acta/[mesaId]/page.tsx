@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { compressImage, blobToDataUrl } from "@/lib/camera";
 import { db } from "@/lib/db/indexed-db";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 interface PhotoItem {
   blob: Blob;
@@ -23,7 +24,9 @@ interface Top3Entry {
 export default function ActaUploadPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const mesaId = decodeURIComponent(params.mesaId as string);
+  const centroFromUrl = searchParams.get("centro") || "";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
@@ -37,7 +40,13 @@ export default function ActaUploadPage() {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedCount, setSavedCount] = useState(0);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    // Load acta count for this session
+    db.actas.count().then(setSavedCount);
+  }, []);
 
   async function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -57,7 +66,6 @@ export default function ActaUploadPage() {
       }
     }
 
-    // Reset input so same file can be selected again
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -92,6 +100,8 @@ export default function ActaUploadPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No autenticado");
 
+      const centroId = centroFromUrl || localStorage.getItem("ge_centro_votacion") || null;
+
       const top3Parsed = top3
         .filter((entry) => entry.party.trim() && entry.votes.trim())
         .map((entry, i) => ({
@@ -102,11 +112,10 @@ export default function ActaUploadPage() {
 
       const totalVotes = top3Parsed.reduce((sum, e) => sum + e.votes, 0) + (parseInt(nullVotes) || 0);
 
-      // Save acta to IndexedDB
       const actaId = await db.actas.add({
         userId: user.id,
         mesaId,
-        centroId: null,
+        centroId,
         top3Parties: top3Parsed,
         totalVotes,
         nullVotes: parseInt(nullVotes) || null,
@@ -116,7 +125,6 @@ export default function ActaUploadPage() {
         createdAt: new Date().toISOString(),
       });
 
-      // Save photos to IndexedDB
       for (const photo of photos) {
         await db.photos.add({
           actaLocalId: actaId as number,
@@ -126,8 +134,8 @@ export default function ActaUploadPage() {
         });
       }
 
+      setSavedCount((prev) => prev + 1);
       setSuccess(true);
-      setTimeout(() => router.push("/acta"), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
@@ -135,32 +143,87 @@ export default function ActaUploadPage() {
     }
   }
 
+  function getNextMesaId(): string {
+    const num = parseInt(mesaId);
+    if (!isNaN(num)) return String(num + 1).padStart(mesaId.length, "0");
+    return "";
+  }
+
   if (success) {
+    const nextMesa = getNextMesaId();
+    const centro = centroFromUrl || localStorage.getItem("ge_centro_votacion") || "";
+
     return (
-      <div className="flex flex-col items-center justify-center py-20">
+      <div className="flex flex-col items-center justify-center py-12">
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
           <svg className="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Acta guardada</h2>
-        <p className="text-sm text-gray-500 mt-1">Mesa {mesaId} - Se sincronizará automáticamente</p>
+        <h2 className="text-xl font-bold text-gray-900">Mesa {mesaId} guardada!</h2>
+        <p className="text-sm text-gray-500 mt-1">Se sincronizará automáticamente</p>
+
+        {/* Stats */}
+        <div className="flex gap-4 mt-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-primary-700">{savedCount}</p>
+            <p className="text-xs text-gray-500">Actas hoy</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-guardian-gold">{savedCount * 15}</p>
+            <p className="text-xs text-gray-500">Puntos</p>
+          </div>
+        </div>
+
+        {/* Quick actions */}
+        <div className="w-full max-w-xs mt-8 space-y-3">
+          {nextMesa && (
+            <Link href={`/acta/${encodeURIComponent(nextMesa)}?centro=${encodeURIComponent(centro)}`} className="block">
+              <Button size="lg" className="w-full" variant="success">
+                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                Siguiente mesa: {nextMesa}
+              </Button>
+            </Link>
+          )}
+          <Link href="/acta" className="block">
+            <Button size="lg" className="w-full" variant="secondary">
+              Ver todas mis actas
+            </Button>
+          </Link>
+          <Link href="/ranking" className="block">
+            <Button size="lg" className="w-full" variant="ghost">
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              Ver ranking
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4 pb-4">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Acta - Mesa {mesaId}</h1>
-        <p className="text-sm text-gray-500">Fotografía el acta y registra los resultados</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Mesa {mesaId}</h1>
+          <p className="text-sm text-gray-500">
+            {centroFromUrl || "Fotografía el acta y registra resultados"}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-gray-400">Actas hoy</p>
+          <p className="text-lg font-bold text-primary-700">{savedCount}</p>
+        </div>
       </div>
 
       {/* Photo Capture */}
       <Card>
         <h3 className="font-semibold text-gray-900 mb-3">Fotos del Acta</h3>
 
-        {/* Photo Grid */}
         {photos.length > 0 && (
           <div className="grid grid-cols-3 gap-2 mb-3">
             {photos.map((photo, index) => (
@@ -232,7 +295,7 @@ export default function ActaUploadPage() {
         <div className="space-y-3">
           {top3.map((entry, index) => (
             <div key={index} className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white ${
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0 ${
                 index === 0 ? "bg-yellow-500" : index === 1 ? "bg-gray-400" : "bg-amber-700"
               }`}>
                 {index + 1}
@@ -255,7 +318,7 @@ export default function ActaUploadPage() {
           ))}
 
           <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200 shrink-0">
               <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -286,21 +349,19 @@ export default function ActaUploadPage() {
         />
       </Card>
 
-      {/* Error */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-sm">
           {error}
         </div>
       )}
 
-      {/* Submit */}
       <Button
         size="lg"
         className="w-full"
         onClick={handleSubmit}
         loading={saving}
       >
-        Guardar y Enviar Acta
+        Guardar Acta de Mesa {mesaId}
       </Button>
     </div>
   );
