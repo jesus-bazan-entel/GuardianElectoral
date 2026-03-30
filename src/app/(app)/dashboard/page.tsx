@@ -64,7 +64,7 @@ export default function DashboardPage() {
           <div>
             <p className="text-white/70 text-sm">Estado actual</p>
             <p className="text-lg font-bold mt-0.5">
-              {isCheckedIn ? "En servicio" : "Fuera de servicio"}
+              {isCheckedIn ? "Presente en centro de votación" : "Aún no registra asistencia"}
             </p>
             {lastCheckin && (
               <p className="text-white/60 text-xs mt-1">
