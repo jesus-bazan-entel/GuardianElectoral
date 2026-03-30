@@ -4,9 +4,10 @@ import { useState, useRef, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { compressImage, blobToDataUrl } from "@/lib/camera";
-import { db } from "@/lib/db/indexed-db";
+import { db, type LocalActa } from "@/lib/db/indexed-db";
 import { useTenantContext } from "@/components/TenantProvider";
 import Link from "next/link";
 
@@ -42,11 +43,59 @@ export default function ActaUploadPage() {
   const [error, setError] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
   const [success, setSuccess] = useState(false);
+  const [existingActa, setExistingActa] = useState<LocalActa | null>(null);
+  const [existingPhotoCount, setExistingPhotoCount] = useState(0);
 
   useEffect(() => {
-    // Load acta count for this session
     db.actas.count().then(setSavedCount);
-  }, []);
+    loadExistingActa();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadExistingActa() {
+    // Find existing acta for this mesa
+    const actas = await db.actas.where("mesaId").equals(mesaId).reverse().sortBy("createdAt");
+    if (actas.length > 0) {
+      const acta = actas[0];
+      setExistingActa(acta);
+
+      // Load top3 data
+      if (acta.top3Parties.length > 0) {
+        const loaded: Top3Entry[] = [
+          { party: "", votes: "" },
+          { party: "", votes: "" },
+          { party: "", votes: "" },
+        ];
+        acta.top3Parties.forEach((p, i) => {
+          if (i < 3) {
+            loaded[i] = { party: p.party, votes: String(p.votes) };
+          }
+        });
+        setTop3(loaded);
+      }
+
+      if (acta.nullVotes) setNullVotes(String(acta.nullVotes));
+      if (acta.notes) setNotes(acta.notes);
+
+      // Load photos from IndexedDB
+      const savedPhotos = await db.photos
+        .where("actaLocalId")
+        .equals(acta.localId!)
+        .toArray();
+
+      setExistingPhotoCount(savedPhotos.length);
+
+      const photoItems: PhotoItem[] = [];
+      for (const p of savedPhotos) {
+        try {
+          const preview = await blobToDataUrl(p.blob);
+          photoItems.push({ blob: p.blob, preview, name: p.name });
+        } catch {
+          // Photo blob may be corrupted
+        }
+      }
+      setPhotos(photoItems);
+    }
+  }
 
   async function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -111,6 +160,12 @@ export default function ActaUploadPage() {
 
       const totalVotes = top3Parsed.reduce((sum, e) => sum + e.votes, 0) + (parseInt(nullVotes) || 0);
 
+      // If editing existing acta, delete old one first
+      if (existingActa?.localId) {
+        await db.photos.where("actaLocalId").equals(existingActa.localId).delete();
+        await db.actas.delete(existingActa.localId);
+      }
+
       const actaId = await db.actas.add({
         userId: session.personero_id,
         mesaId,
@@ -133,7 +188,7 @@ export default function ActaUploadPage() {
         });
       }
 
-      setSavedCount((prev) => prev + 1);
+      setSavedCount((prev) => existingActa ? prev : prev + 1);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al guardar");
@@ -162,7 +217,6 @@ export default function ActaUploadPage() {
         <h2 className="text-xl font-bold text-gray-900">Mesa {mesaId} guardada!</h2>
         <p className="text-sm text-gray-500 mt-1">Se sincronizará automáticamente</p>
 
-        {/* Stats */}
         <div className="flex gap-4 mt-4">
           <div className="text-center">
             <p className="text-2xl font-bold text-primary-700">{savedCount}</p>
@@ -174,7 +228,6 @@ export default function ActaUploadPage() {
           </div>
         </div>
 
-        {/* Quick actions */}
         <div className="w-full max-w-xs mt-8 space-y-3">
           {nextMesa && (
             <Link href={`/acta/${encodeURIComponent(nextMesa)}?centro=${encodeURIComponent(centro)}`} className="block">
@@ -213,11 +266,35 @@ export default function ActaUploadPage() {
             {centroFromUrl || "Fotografía el acta y registra resultados"}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-400">Actas hoy</p>
-          <p className="text-lg font-bold text-primary-700">{savedCount}</p>
+        <div className="flex items-center gap-2">
+          {existingActa && (
+            <Badge variant={
+              existingActa.syncStatus === "synced" ? "success" :
+              existingActa.syncStatus === "error" ? "danger" : "warning"
+            }>
+              {existingActa.syncStatus === "synced" ? "Enviado" :
+               existingActa.syncStatus === "error" ? "Error sync" : "Pendiente"}
+            </Badge>
+          )}
+          <div className="text-right">
+            <p className="text-xs text-gray-400">Actas hoy</p>
+            <p className="text-lg font-bold text-primary-700">{savedCount}</p>
+          </div>
         </div>
       </div>
+
+      {/* Existing acta notice */}
+      {existingActa && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-xl p-3 text-sm flex items-center gap-2">
+          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>
+            Acta existente cargada ({existingPhotoCount} foto{existingPhotoCount !== 1 ? "s" : ""}).
+            Puedes editar y volver a guardar.
+          </span>
+        </div>
+      )}
 
       {/* Photo Capture */}
       <Card>
@@ -360,7 +437,7 @@ export default function ActaUploadPage() {
         onClick={handleSubmit}
         loading={saving}
       >
-        Guardar Acta de Mesa {mesaId}
+        {existingActa ? "Actualizar Acta" : "Guardar Acta"} de Mesa {mesaId}
       </Button>
     </div>
   );

@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { db, type LocalActa } from "@/lib/db/indexed-db";
+import { useSync } from "@/hooks/useSync";
 import Link from "next/link";
 
 export default function ActaListPage() {
   const [actas, setActas] = useState<LocalActa[]>([]);
   const [mesaId, setMesaId] = useState("");
   const [centroVotacion, setCentroVotacion] = useState("");
+  const { pendingCount, syncing, isOnline, doSync } = useSync();
 
   useEffect(() => {
     loadActas();
@@ -137,7 +139,23 @@ export default function ActaListPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-gray-900">Actas registradas ({actas.length})</h3>
-            <Badge variant="info">{mesasCubiertas} mesa{mesasCubiertas !== 1 ? "s" : ""}</Badge>
+            <div className="flex items-center gap-2">
+              {pendingCount > 0 && (
+                <Button
+                  size="sm"
+                  variant={isOnline ? "primary" : "secondary"}
+                  onClick={async () => { await doSync(); loadActas(); }}
+                  loading={syncing}
+                  disabled={!isOnline}
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Sincronizar ({pendingCount})
+                </Button>
+              )}
+              <Badge variant="info">{mesasCubiertas} mesa{mesasCubiertas !== 1 ? "s" : ""}</Badge>
+            </div>
           </div>
           {actas.map((acta) => (
             <Link key={acta.localId} href={`/acta/${encodeURIComponent(acta.mesaId)}`}>
