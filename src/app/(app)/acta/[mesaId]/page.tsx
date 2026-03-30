@@ -1,0 +1,307 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { compressImage, blobToDataUrl } from "@/lib/camera";
+import { db } from "@/lib/db/indexed-db";
+import { createClient } from "@/lib/supabase/client";
+
+interface PhotoItem {
+  blob: Blob;
+  preview: string;
+  name: string;
+}
+
+interface Top3Entry {
+  party: string;
+  votes: string;
+}
+
+export default function ActaUploadPage() {
+  const params = useParams();
+  const router = useRouter();
+  const mesaId = decodeURIComponent(params.mesaId as string);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const supabase = createClient();
+
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [top3, setTop3] = useState<Top3Entry[]>([
+    { party: "", votes: "" },
+    { party: "", votes: "" },
+    { party: "", votes: "" },
+  ]);
+  const [nullVotes, setNullVotes] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  async function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files) return;
+
+    for (const file of Array.from(files)) {
+      try {
+        const compressed = await compressImage(file);
+        const preview = await blobToDataUrl(compressed);
+        setPhotos((prev) => [...prev, {
+          blob: compressed,
+          preview,
+          name: `acta_${mesaId}_${Date.now()}.jpg`,
+        }]);
+      } catch (err) {
+        console.error("Error comprimiendo foto:", err);
+      }
+    }
+
+    // Reset input so same file can be selected again
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removePhoto(index: number) {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateTop3(index: number, field: "party" | "votes", value: string) {
+    setTop3((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  }
+
+  async function handleSubmit() {
+    if (photos.length === 0) {
+      setError("Debes agregar al menos una foto del acta");
+      return;
+    }
+
+    const hasAnyTop3 = top3.some((entry) => entry.party.trim() && entry.votes.trim());
+    if (!hasAnyTop3) {
+      setError("Ingresa al menos el primer lugar del top 3");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No autenticado");
+
+      const top3Parsed = top3
+        .filter((entry) => entry.party.trim() && entry.votes.trim())
+        .map((entry, i) => ({
+          party: entry.party.trim(),
+          votes: parseInt(entry.votes) || 0,
+          position: i + 1,
+        }));
+
+      const totalVotes = top3Parsed.reduce((sum, e) => sum + e.votes, 0) + (parseInt(nullVotes) || 0);
+
+      // Save acta to IndexedDB
+      const actaId = await db.actas.add({
+        userId: user.id,
+        mesaId,
+        centroId: null,
+        top3Parties: top3Parsed,
+        totalVotes,
+        nullVotes: parseInt(nullVotes) || null,
+        notes: notes.trim() || null,
+        status: "submitted",
+        syncStatus: "pending",
+        createdAt: new Date().toISOString(),
+      });
+
+      // Save photos to IndexedDB
+      for (const photo of photos) {
+        await db.photos.add({
+          actaLocalId: actaId as number,
+          blob: photo.blob,
+          name: photo.name,
+          syncStatus: "pending",
+        });
+      }
+
+      setSuccess(true);
+      setTimeout(() => router.push("/acta"), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
+          <svg className="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-gray-900">Acta guardada</h2>
+        <p className="text-sm text-gray-500 mt-1">Mesa {mesaId} - Se sincronizará automáticamente</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 pb-4">
+      <div>
+        <h1 className="text-xl font-bold text-gray-900">Acta - Mesa {mesaId}</h1>
+        <p className="text-sm text-gray-500">Fotografía el acta y registra los resultados</p>
+      </div>
+
+      {/* Photo Capture */}
+      <Card>
+        <h3 className="font-semibold text-gray-900 mb-3">Fotos del Acta</h3>
+
+        {/* Photo Grid */}
+        {photos.length > 0 && (
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {photos.map((photo, index) => (
+              <div key={index} className="relative aspect-[3/4] rounded-lg overflow-hidden bg-gray-100">
+                <img src={photo.preview} alt={`Acta foto ${index + 1}`} className="w-full h-full object-cover" />
+                <button
+                  onClick={() => removePhoto(index)}
+                  className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs shadow"
+                >
+                  X
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          multiple
+          onChange={handlePhotoCapture}
+          className="hidden"
+        />
+
+        <div className="flex gap-2">
+          <Button
+            variant="primary"
+            className="flex-1"
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.setAttribute("capture", "environment");
+                fileInputRef.current.click();
+              }
+            }}
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Tomar Foto
+          </Button>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.removeAttribute("capture");
+                fileInputRef.current.click();
+              }
+            }}
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Subir
+          </Button>
+        </div>
+
+        <p className="text-xs text-gray-400 mt-2 text-center">
+          {photos.length}/5 fotos - Las imágenes se comprimen automáticamente
+        </p>
+      </Card>
+
+      {/* Top 3 Form */}
+      <Card>
+        <h3 className="font-semibold text-gray-900 mb-3">Top 3 - Resultados de Votación</h3>
+        <div className="space-y-3">
+          {top3.map((entry, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white ${
+                index === 0 ? "bg-yellow-500" : index === 1 ? "bg-gray-400" : "bg-amber-700"
+              }`}>
+                {index + 1}
+              </div>
+              <Input
+                placeholder="Nombre del partido"
+                value={entry.party}
+                onChange={(e) => updateTop3(index, "party", e.target.value)}
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                placeholder="Votos"
+                value={entry.votes}
+                onChange={(e) => updateTop3(index, "votes", e.target.value)}
+                className="w-24"
+                inputMode="numeric"
+              />
+            </div>
+          ))}
+
+          <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
+              <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <span className="text-sm text-gray-600 flex-1">Votos nulos</span>
+            <Input
+              type="number"
+              placeholder="Nulos"
+              value={nullVotes}
+              onChange={(e) => setNullVotes(e.target.value)}
+              className="w-24"
+              inputMode="numeric"
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Notes */}
+      <Card>
+        <h3 className="font-semibold text-gray-900 mb-2">Observaciones</h3>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Notas adicionales sobre el acta (opcional)"
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+          rows={3}
+          style={{ fontSize: "16px" }}
+        />
+      </Card>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Submit */}
+      <Button
+        size="lg"
+        className="w-full"
+        onClick={handleSubmit}
+        loading={saving}
+      >
+        Guardar y Enviar Acta
+      </Button>
+    </div>
+  );
+}
