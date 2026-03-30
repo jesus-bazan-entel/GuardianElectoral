@@ -6,15 +6,15 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { db, type LocalCheckin } from "@/lib/db/indexed-db";
-import { createClient } from "@/lib/supabase/client";
+import { useTenantContext } from "@/components/TenantProvider";
 
 export default function CheckinPage() {
   const { position, loading: geoLoading, error: geoError, requestPosition } = useGeolocation();
+  const { session } = useTenantContext();
   const [checkinLoading, setCheckinLoading] = useState(false);
   const [lastAction, setLastAction] = useState<LocalCheckin | null>(null);
   const [history, setHistory] = useState<LocalCheckin[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
-  const supabase = createClient();
 
   useEffect(() => {
     requestPosition();
@@ -36,11 +36,10 @@ export default function CheckinPage() {
     try {
       // Get fresh position
       const pos = await requestPosition();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No autenticado");
+      if (!session) throw new Error("No autenticado");
 
       const record: LocalCheckin = {
-        userId: user.id,
+        userId: session.personero_id,
         type,
         lat: pos?.lat ?? null,
         lng: pos?.lng ?? null,

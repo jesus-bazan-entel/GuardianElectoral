@@ -1,8 +1,15 @@
-import { updateSession } from "@/lib/supabase/middleware";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
-  return await updateSession(request);
+export function middleware(request: NextRequest) {
+  // With DNI/PIN auth, session is managed client-side (localStorage).
+  // Middleware only handles tenant domain resolution hints via headers.
+  const response = NextResponse.next();
+
+  // Pass the host to client components via a header
+  const host = request.headers.get("host") || "";
+  response.headers.set("x-tenant-host", host);
+
+  return response;
 }
 
 export const config = {

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { compressImage, blobToDataUrl } from "@/lib/camera";
 import { db, type LocalIncident } from "@/lib/db/indexed-db";
-import { createClient } from "@/lib/supabase/client";
+import { useTenantContext } from "@/components/TenantProvider";
 
 const CATEGORIES = [
   { value: "intimidation", label: "Intimidación", icon: "!!", color: "bg-red-100 text-red-800" },
@@ -27,7 +27,7 @@ const SEVERITIES = [
 export default function IncidentsPage() {
   const { position, requestPosition } = useGeolocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
+  const { session } = useTenantContext();
 
   const [category, setCategory] = useState("");
   const [severity, setSeverity] = useState("medium");
@@ -65,13 +65,12 @@ export default function IncidentsPage() {
     setSaving(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No autenticado");
+      if (!session) throw new Error("No autenticado");
 
       const pos = await requestPosition();
 
       await db.incidents.add({
-        userId: user.id,
+        userId: session.personero_id,
         mesaId: mesaId.trim() || null,
         category,
         description: description.trim(),

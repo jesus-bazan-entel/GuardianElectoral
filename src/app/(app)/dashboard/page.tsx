@@ -6,32 +6,21 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { useSync } from "@/hooks/useSync";
 import { db } from "@/lib/db/indexed-db";
-import { createClient } from "@/lib/supabase/client";
+import { useTenantContext } from "@/components/TenantProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function DashboardPage() {
   const { pendingCount, syncing, isOnline, doSync } = useSync();
+  const { session, tenant, logout } = useTenantContext();
   const [lastCheckin, setLastCheckin] = useState<{ type: string; timestamp: string } | null>(null);
   const [actaCount, setActaCount] = useState(0);
   const [mesaCount, setMesaCount] = useState(0);
   const [puntos, setPuntos] = useState(0);
-  const [userName, setUserName] = useState("");
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: personero } = await supabase
-          .from("personeros")
-          .select("full_name, assigned_mesa, assigned_centro")
-          .eq("id", user.id)
-          .single();
-        if (personero) setUserName(personero.full_name);
-      }
-
       const checkins = await db.checkins.orderBy("timestamp").reverse().limit(1).toArray();
       if (checkins.length > 0) {
         setLastCheckin({ type: checkins[0].type, timestamp: checkins[0].timestamp });
@@ -45,12 +34,11 @@ export default function DashboardPage() {
       setPuntos(uniqueMesas * 10 + actas.length * 5 + fullTop3 * 2);
     }
     loadData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
+  function handleLogout() {
+    logout();
     router.push("/login");
-    router.refresh();
   }
 
   const isCheckedIn = lastCheckin?.type === "checkin";
@@ -60,21 +48,26 @@ export default function DashboardPage() {
       {/* Welcome */}
       <div>
         <h1 className="text-xl font-bold text-gray-900">
-          Hola{userName ? `, ${userName}` : ""}
+          Hola{session ? `, ${session.full_name}` : ""}
         </h1>
-        <p className="text-sm text-gray-500">Panel de control del personero</p>
+        <p className="text-sm text-gray-500">
+          {tenant?.name || "Guardian Electoral"}
+        </p>
       </div>
 
       {/* Status Card */}
-      <Card className="bg-gradient-to-r from-primary-700 to-primary-800 text-white border-0">
+      <Card
+        className="text-white border-0"
+        style={{ background: `linear-gradient(to right, ${tenant?.primary_color || "#1d4ed8"}, ${tenant?.primary_color || "#1d4ed8"}cc)` }}
+      >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-primary-200 text-sm">Estado actual</p>
+            <p className="text-white/70 text-sm">Estado actual</p>
             <p className="text-lg font-bold mt-0.5">
               {isCheckedIn ? "En servicio" : "Fuera de servicio"}
             </p>
             {lastCheckin && (
-              <p className="text-primary-200 text-xs mt-1">
+              <p className="text-white/60 text-xs mt-1">
                 Último {lastCheckin.type === "checkin" ? "ingreso" : "salida"}:{" "}
                 {new Date(lastCheckin.timestamp).toLocaleTimeString("es")}
               </p>
@@ -88,7 +81,10 @@ export default function DashboardPage() {
 
       {/* Ranking Progress */}
       <Link href="/ranking">
-        <Card className="bg-gradient-to-r from-guardian-gold/90 to-yellow-600 text-white border-0 hover:shadow-lg transition-shadow cursor-pointer">
+        <Card
+          className="text-white border-0 hover:shadow-lg transition-shadow cursor-pointer"
+          style={{ background: `linear-gradient(to right, ${tenant?.secondary_color || "#d97706"}ee, ${tenant?.secondary_color || "#d97706"})` }}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
@@ -97,12 +93,12 @@ export default function DashboardPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-yellow-100 text-xs">Tu ranking</p>
+                <p className="text-white/70 text-xs">Tu ranking</p>
                 <p className="text-lg font-bold">{puntos} puntos</p>
-                <p className="text-yellow-100 text-xs">{mesaCount} mesa{mesaCount !== 1 ? "s" : ""} cubierta{mesaCount !== 1 ? "s" : ""}</p>
+                <p className="text-white/70 text-xs">{mesaCount} mesa{mesaCount !== 1 ? "s" : ""} cubierta{mesaCount !== 1 ? "s" : ""}</p>
               </div>
             </div>
-            <svg className="w-6 h-6 text-yellow-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-6 h-6 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </div>
@@ -113,7 +109,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3">
         <Link href="/checkin">
           <Card className="text-center hover:shadow-md transition-shadow cursor-pointer">
-            <svg className="w-8 h-8 mx-auto text-primary-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: tenant?.primary_color || "#2563eb" }}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
@@ -124,7 +120,7 @@ export default function DashboardPage() {
 
         <Link href="/acta">
           <Card className="text-center hover:shadow-md transition-shadow cursor-pointer">
-            <svg className="w-8 h-8 mx-auto text-guardian-gold mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ color: tenant?.secondary_color || "#d97706" }}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>

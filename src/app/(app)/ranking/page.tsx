@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { db } from "@/lib/db/indexed-db";
 import { createClient } from "@/lib/supabase/client";
+import { useTenantContext } from "@/components/TenantProvider";
 
 interface RankingEntry {
   id: string;
@@ -24,6 +25,7 @@ export default function RankingPage() {
   const [myPosition, setMyPosition] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [useLocal, setUseLocal] = useState(false);
+  const { session, tenant } = useTenantContext();
   const supabase = createClient();
 
   useEffect(() => {
@@ -41,15 +43,16 @@ export default function RankingPage() {
 
   async function loadRanking() {
     try {
-      const { data, error } = await supabase.rpc("get_party_ranking");
+      const { data, error } = await supabase.rpc("get_party_ranking", {
+        p_tenant_slug: tenant?.slug || null,
+      });
       if (error) throw error;
 
       if (data && data.length > 0) {
         setRanking(data);
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const me = data.find((r: RankingEntry) => r.id === user.id);
+        if (session) {
+          const me = data.find((r: RankingEntry) => r.id === session.personero_id);
           if (me) setMyPosition(me.posicion);
         }
       } else {

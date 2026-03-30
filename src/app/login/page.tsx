@@ -1,125 +1,171 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Card } from "@/components/ui/Card";
+import { useTenantContext } from "@/components/TenantProvider";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { PIN_LENGTH } from "@/lib/constants";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { tenant, login, loading: tenantLoading } = useTenantContext();
+  const [dni, setDni] = useState("");
+  const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"login" | "magic">("login");
-  const [magicSent, setMagicSent] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (!dni.trim() || pin.length !== PIN_LENGTH) return;
+
     setLoading(true);
     setError(null);
 
-    try {
-      if (mode === "magic") {
-        const { error } = await supabase.auth.signInWithOtp({ email });
-        if (error) throw error;
-        setMagicSent(true);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        router.push("/dashboard");
-        router.refresh();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión");
-    } finally {
-      setLoading(false);
+    const result = await login(dni.trim(), pin);
+    if (result.success) {
+      router.push("/dashboard");
+    } else {
+      setError(result.error || "Error al iniciar sesión");
     }
+    setLoading(false);
+  }
+
+  const primaryColor = tenant?.primary_color || "#1e40af";
+
+  if (tenantLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: primaryColor }}>
+        <div className="text-white text-center">
+          <svg className="animate-spin h-10 w-10 mx-auto mb-3" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-sm opacity-75">Cargando...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary-900 to-primary-700 flex flex-col items-center justify-center p-6">
+    <div
+      className="min-h-screen flex flex-col items-center justify-center p-6"
+      style={{ background: `linear-gradient(to bottom, ${primaryColor}, ${primaryColor}dd)` }}
+    >
       <div className="w-full max-w-sm">
         {/* Logo & Title */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-2xl mx-auto mb-4 flex items-center justify-center">
-            <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white">Guardian Electoral</h1>
-          <p className="text-primary-200 mt-1 text-sm">Control electoral en tiempo real</p>
+          {tenant?.logo_url ? (
+            <img
+              src={tenant.logo_url}
+              alt={tenant.name}
+              className="w-20 h-20 mx-auto mb-4 rounded-2xl object-contain bg-white/10 p-2"
+            />
+          ) : (
+            <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-2xl mx-auto mb-4 flex items-center justify-center">
+              <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
+            </div>
+          )}
+          <h1 className="text-2xl font-bold text-white">
+            {tenant?.name || "Guardian Electoral"}
+          </h1>
+          <p className="text-white/60 mt-1 text-sm">
+            {tenant?.welcome_message || "Control electoral en tiempo real"}
+          </p>
         </div>
 
         {/* Login Form */}
-        <div className="bg-white rounded-2xl p-6 shadow-xl">
-          {magicSent ? (
-            <div className="text-center py-4">
-              <svg className="w-12 h-12 text-green-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <h2 className="text-lg font-semibold text-gray-900">Revisa tu correo</h2>
-              <p className="text-gray-500 text-sm mt-1">
-                Enviamos un enlace de acceso a <strong>{email}</strong>
-              </p>
-              <Button
-                variant="ghost"
-                className="mt-4"
-                onClick={() => { setMagicSent(false); setMode("login"); }}
-              >
-                Volver
-              </Button>
+        <Card>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="text-center mb-2">
+              <h2 className="text-lg font-semibold text-gray-900">Iniciar Sesión</h2>
+              <p className="text-sm text-gray-500">Ingresa tu DNI y PIN de 6 dígitos</p>
             </div>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <Input
-                label="Correo electrónico"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@correo.com"
-                required
-                autoComplete="email"
+
+            <Input
+              label="DNI"
+              type="text"
+              value={dni}
+              onChange={(e) => setDni(e.target.value.replace(/\D/g, ""))}
+              placeholder="Número de DNI"
+              required
+              inputMode="numeric"
+              autoComplete="username"
+              maxLength={15}
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                PIN de acceso
+              </label>
+              <div className="flex gap-1.5 justify-center">
+                {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-11 h-14 rounded-xl border-2 flex items-center justify-center text-xl font-bold transition-colors ${
+                      pin.length > i
+                        ? "border-primary-500 bg-primary-50 text-primary-700"
+                        : "border-gray-200 bg-gray-50 text-gray-300"
+                    }`}
+                  >
+                    {pin[i] ? "\u2022" : ""}
+                  </div>
+                ))}
+              </div>
+              <input
+                type="tel"
+                value={pin}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "").slice(0, PIN_LENGTH);
+                  setPin(val);
+                }}
+                className="sr-only"
+                id="pin-input"
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                maxLength={PIN_LENGTH}
               />
-
-              {mode === "login" && (
-                <Input
-                  label="Contraseña"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Tu contraseña"
-                  required
-                  autoComplete="current-password"
-                />
-              )}
-
-              {error && (
-                <p className="text-sm text-red-600 bg-red-50 p-2 rounded-lg">{error}</p>
-              )}
-
-              <Button type="submit" loading={loading} className="w-full" size="lg">
-                {mode === "login" ? "Iniciar Sesión" : "Enviar enlace mágico"}
-              </Button>
-
-              <button
-                type="button"
-                className="w-full text-center text-sm text-primary-600 hover:text-primary-800"
-                onClick={() => setMode(mode === "login" ? "magic" : "login")}
+              <label
+                htmlFor="pin-input"
+                className="block text-center text-xs text-primary-600 mt-2 cursor-pointer"
               >
-                {mode === "login" ? "Acceder con enlace mágico" : "Acceder con contraseña"}
-              </button>
-            </form>
-          )}
-        </div>
+                Toca aquí para ingresar PIN
+              </label>
+            </div>
 
-        <p className="text-primary-300 text-xs text-center mt-6">
-          v1.0 - Guardian Electoral
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 p-2.5 rounded-lg text-center">{error}</p>
+            )}
+
+            <Button
+              type="submit"
+              loading={loading}
+              className="w-full"
+              size="lg"
+              disabled={!dni.trim() || pin.length !== PIN_LENGTH}
+            >
+              Ingresar
+            </Button>
+
+            <div className="text-center pt-2 border-t border-gray-100">
+              <p className="text-sm text-gray-500">¿Primera vez?</p>
+              <Link
+                href="/register"
+                className="text-sm font-semibold hover:underline"
+                style={{ color: primaryColor }}
+              >
+                Registrarme como personero
+              </Link>
+            </div>
+          </form>
+        </Card>
+
+        <p className="text-white/40 text-xs text-center mt-6">
+          Guardian Electoral v1.0
         </p>
       </div>
     </div>

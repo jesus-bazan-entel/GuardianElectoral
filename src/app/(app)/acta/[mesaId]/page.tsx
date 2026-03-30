@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { compressImage, blobToDataUrl } from "@/lib/camera";
 import { db } from "@/lib/db/indexed-db";
-import { createClient } from "@/lib/supabase/client";
+import { useTenantContext } from "@/components/TenantProvider";
 import Link from "next/link";
 
 interface PhotoItem {
@@ -28,7 +28,7 @@ export default function ActaUploadPage() {
   const mesaId = decodeURIComponent(params.mesaId as string);
   const centroFromUrl = searchParams.get("centro") || "";
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
+  const { session } = useTenantContext();
 
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [top3, setTop3] = useState<Top3Entry[]>([
@@ -97,8 +97,7 @@ export default function ActaUploadPage() {
     setError(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No autenticado");
+      if (!session) throw new Error("No autenticado");
 
       const centroId = centroFromUrl || localStorage.getItem("ge_centro_votacion") || null;
 
@@ -113,7 +112,7 @@ export default function ActaUploadPage() {
       const totalVotes = top3Parsed.reduce((sum, e) => sum + e.votes, 0) + (parseInt(nullVotes) || 0);
 
       const actaId = await db.actas.add({
-        userId: user.id,
+        userId: session.personero_id,
         mesaId,
         centroId,
         top3Parties: top3Parsed,
