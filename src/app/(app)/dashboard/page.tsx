@@ -79,31 +79,26 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* Ranking Progress */}
-      <Link href="/ranking">
-        <Card
-          className="text-white border-0 hover:shadow-lg transition-shadow cursor-pointer"
-          style={{ background: `linear-gradient(to right, ${tenant?.secondary_color || "#d97706"}ee, ${tenant?.secondary_color || "#d97706"})` }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-white/70 text-xs">Tu ranking</p>
-                <p className="text-lg font-bold">{puntos} puntos</p>
-                <p className="text-white/70 text-xs">{mesaCount} mesa{mesaCount !== 1 ? "s" : ""} cubierta{mesaCount !== 1 ? "s" : ""}</p>
-              </div>
+      {/* Progress Card */}
+      <Card
+        className="text-white border-0"
+        style={{ background: `linear-gradient(to right, ${tenant?.secondary_color || "#d97706"}ee, ${tenant?.secondary_color || "#d97706"})` }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
             </div>
-            <svg className="w-6 h-6 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
+            <div>
+              <p className="text-white/70 text-xs">Tu progreso</p>
+              <p className="text-lg font-bold">{puntos} puntos</p>
+              <p className="text-white/70 text-xs">{mesaCount} mesa{mesaCount !== 1 ? "s" : ""} · {actaCount} acta{actaCount !== 1 ? "s" : ""}</p>
+            </div>
           </div>
-        </Card>
-      </Link>
+        </div>
+      </Card>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-3">
