@@ -51,6 +51,7 @@ export default function ClientesPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form fields
   const [candidateName, setCandidateName] = useState("");
@@ -93,6 +94,24 @@ export default function ClientesPage() {
       .replace(/^-|-$/g, "");
   }
 
+  function loadTenantForEdit(t: Tenant) {
+    setEditingId(t.id);
+    setCandidateName(t.candidate_name || "");
+    setCandidatePosition(t.candidate_position || "");
+    setCampaignName(t.name);
+    setScopeType((t.scope_type as "distrital" | "nacional") || "distrital");
+    setSelectedDistrict(t.electoral_district_id || "");
+    setContactPhone(t.contact_phone || "");
+    setContactEmail(t.contact_email || "");
+    setPrimaryColor(t.primary_color || "#1e40af");
+    setSecondaryColor(t.secondary_color || "#d97706");
+    setMaxPersoneros(String(t.max_personeros || 200));
+    setIsPaid(t.is_paid || false);
+    setExpiresAt(t.expires_at ? t.expires_at.split("T")[0] : "2026-10-15");
+    setShowForm(true);
+    setError(null);
+  }
+
   async function handleSubmit() {
     if (!candidateName.trim() || !campaignName.trim()) {
       setError("Nombre del candidato y nombre de campaña son requeridos");
@@ -115,10 +134,8 @@ export default function ClientesPage() {
         ? 90265
         : (district?.total_mesas || 5000);
 
-      const { error: insertError } = await supabase.from("tenants").insert({
-        slug,
+      const tenantData = {
         name: campaignName.trim(),
-        domain,
         candidate_name: candidateName.trim(),
         candidate_position: candidatePosition.trim() || null,
         scope_type: scopeType,
@@ -132,26 +149,43 @@ export default function ClientesPage() {
         contact_phone: contactPhone.trim() || null,
         contact_email: contactEmail.trim() || null,
         is_paid: isPaid,
-        is_active: true,
         expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
-      });
+      };
 
-      if (insertError) throw insertError;
+      if (editingId) {
+        // UPDATE
+        const { error: updateError } = await supabase
+          .from("tenants")
+          .update(tenantData)
+          .eq("id", editingId);
+        if (updateError) throw updateError;
+        setSuccess(`Cliente "${candidateName}" actualizado correctamente`);
+      } else {
+        // INSERT
+        const { error: insertError } = await supabase.from("tenants").insert({
+          ...tenantData,
+          slug,
+          domain,
+          is_active: true,
+        });
+        if (insertError) throw insertError;
+        setSuccess(`Cliente "${candidateName}" registrado. Dominio: ${domain}`);
+      }
 
-      setSuccess(`Cliente "${candidateName}" registrado. Dominio: ${domain}`);
       setShowForm(false);
       resetForm();
       await loadData();
 
       setTimeout(() => setSuccess(null), 8000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al registrar");
+      setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setSaving(false);
     }
   }
 
   function resetForm() {
+    setEditingId(null);
     setCandidateName("");
     setCandidatePosition("");
     setCampaignName("");
@@ -198,7 +232,9 @@ export default function ClientesPage() {
       {/* Formulario de alta */}
       {showForm && (
         <Card>
-          <h3 className="font-semibold text-gray-900 mb-4">Registrar Nuevo Candidato</h3>
+          <h3 className="font-semibold text-gray-900 mb-4">
+            {editingId ? "Editar Candidato" : "Registrar Nuevo Candidato"}
+          </h3>
 
           <div className="space-y-4">
             {/* Datos del candidato */}
@@ -390,7 +426,7 @@ export default function ClientesPage() {
                 onClick={handleSubmit}
                 loading={saving}
               >
-                Registrar Candidato
+                {editingId ? "Guardar Cambios" : "Registrar Candidato"}
               </Button>
             </div>
           </div>
@@ -402,12 +438,16 @@ export default function ClientesPage() {
         <div className="space-y-3">
           <h3 className="font-semibold text-gray-900">Candidatos registrados ({tenants.length})</h3>
           {tenants.map((t) => (
-            <Card key={t.id}>
+            <Card
+              key={t.id}
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => loadTenantForEdit(t)}
+            >
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
                     <div
-                      className="w-4 h-4 rounded-full"
+                      className="w-4 h-4 rounded-full shrink-0"
                       style={{ backgroundColor: t.primary_color }}
                     />
                     <p className="font-semibold text-gray-900">
@@ -418,7 +458,7 @@ export default function ClientesPage() {
                     <p className="text-xs text-gray-500 ml-6">{t.candidate_position}</p>
                   )}
                   <p className="text-xs text-primary-600 ml-6 mt-0.5">{t.domain}</p>
-                  <div className="flex gap-2 mt-2 ml-6">
+                  <div className="flex gap-2 mt-2 ml-6 flex-wrap">
                     <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">
                       Máx {t.max_personeros} personeros
                     </span>
@@ -427,9 +467,14 @@ export default function ClientesPage() {
                         {t.contact_phone}
                       </span>
                     )}
+                    {t.expires_at && (
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">
+                        Vence: {new Date(t.expires_at).toLocaleDateString("es")}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
+                <div className="flex flex-col items-end gap-1 shrink-0">
                   <Badge variant={t.is_paid ? "success" : "warning"}>
                     {t.is_paid ? "Pagado" : "Pendiente"}
                   </Badge>
@@ -439,6 +484,7 @@ export default function ClientesPage() {
                   <Badge variant={t.scope_type === "nacional" ? "info" : "default"}>
                     {t.scope_type === "nacional" ? "Nacional" : "Distrital"}
                   </Badge>
+                  <span className="text-[10px] text-gray-400 mt-1">Toca para editar</span>
                 </div>
               </div>
             </Card>
