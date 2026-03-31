@@ -92,13 +92,13 @@ export default function AdminPage() {
             <p className="text-xs text-gray-500 mt-0.5">Alta de candidatos</p>
           </Card>
         </Link>
-        <Link href="/dashboard">
+        <Link href="/admin/actas">
           <Card className="text-center hover:shadow-md transition-shadow cursor-pointer">
-            <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            <svg className="w-8 h-8 mx-auto text-guardian-gold mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <p className="font-semibold text-sm text-gray-900">Mi Panel</p>
-            <p className="text-xs text-gray-500 mt-0.5">Volver al dashboard</p>
+            <p className="font-semibold text-sm text-gray-900">Actas Recibidas</p>
+            <p className="text-xs text-gray-500 mt-0.5">Resultados electorales</p>
           </Card>
         </Link>
       </div>
