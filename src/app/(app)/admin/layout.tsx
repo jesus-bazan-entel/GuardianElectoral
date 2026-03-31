@@ -14,7 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
     // Only admin and coordinator roles can access /admin
-    if (!loading && session && session.role !== "admin" && session.role !== "coordinator") {
+    if (!loading && session && session.role !== "admin" && session.role !== "coordinator" && session.role !== "superadmin") {
       router.replace("/dashboard");
     }
   }, [loading, isAuthenticated, session, router]);
@@ -30,7 +30,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!session || (session.role !== "admin" && session.role !== "coordinator")) {
+  if (!session || (session.role !== "admin" && session.role !== "coordinator" && session.role !== "superadmin")) {
     return null;
   }
 

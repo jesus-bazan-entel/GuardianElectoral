@@ -15,7 +15,7 @@ export default function DashboardPage() {
   const { session, tenant, logout } = useTenantContext();
   const router = useRouter();
 
-  const isAdmin = session?.role === "admin" || session?.role === "coordinator";
+  const isAdmin = session?.role === "admin" || session?.role === "coordinator" || session?.role === "superadmin";
 
   // Redirect admin to admin panel
   useEffect(() => {

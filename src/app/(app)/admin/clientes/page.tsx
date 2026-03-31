@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { createClient } from "@/lib/supabase/client";
+import { useTenantContext } from "@/components/TenantProvider";
 import Link from "next/link";
 
 interface ElectoralDistrict {
@@ -51,6 +52,8 @@ interface NationalStats {
 
 export default function ClientesPage() {
   const supabase = createClient();
+  const { session } = useTenantContext();
+  const isSuperAdmin = session?.role === "superadmin";
   const [districts, setDistricts] = useState<ElectoralDistrict[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [nationalStats, setNationalStats] = useState<NationalStats>({ centros: 0, mesas: 0, electores: 0 });
@@ -72,6 +75,14 @@ export default function ClientesPage() {
   const [secondaryColor, setSecondaryColor] = useState("#d97706");
   const [isPaid, setIsPaid] = useState(false);
   const [expiresAt, setExpiresAt] = useState("2026-10-15");
+
+  // Admin creation form
+  const [showAdminForm, setShowAdminForm] = useState<string | null>(null); // tenant slug
+  const [adminDni, setAdminDni] = useState("");
+  const [adminName, setAdminName] = useState("");
+  const [adminPhone, setAdminPhone] = useState("");
+  const [adminPin, setAdminPin] = useState("");
+  const [savingAdmin, setSavingAdmin] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -96,6 +107,35 @@ export default function ClientesPage() {
       .select("*")
       .order("created_at", { ascending: false });
     if (tenantData) setTenants(tenantData);
+  }
+
+  async function handleCreateAdmin() {
+    if (!showAdminForm || !adminDni.trim() || !adminName.trim() || adminPin.length !== 6) {
+      setError("DNI, nombre y PIN de 6 dígitos son requeridos");
+      return;
+    }
+    setSavingAdmin(true);
+    setError(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc("create_tenant_admin", {
+        p_tenant_slug: showAdminForm,
+        p_dni: adminDni.trim(),
+        p_full_name: adminName.trim(),
+        p_phone: adminPhone.trim() || null,
+        p_pin: adminPin,
+      });
+      if (rpcError) throw rpcError;
+      const result = data as unknown as { success: boolean; error?: string };
+      if (!result.success) throw new Error(result.error || "Error");
+      setSuccess(`Admin "${adminName}" creado para ${showAdminForm}`);
+      setShowAdminForm(null);
+      setAdminDni(""); setAdminName(""); setAdminPhone(""); setAdminPin("");
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al crear admin");
+    } finally {
+      setSavingAdmin(false);
+    }
   }
 
   function generateSlug(name: string): string {
@@ -241,6 +281,18 @@ export default function ClientesPage() {
     setSecondaryColor("#d97706");
     setIsPaid(false);
     setExpiresAt("2026-10-15");
+  }
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="text-center py-12 text-gray-400">
+        <svg className="w-16 h-16 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        <p className="text-sm font-medium">Acceso restringido</p>
+        <p className="text-xs mt-1">Solo el superadmin puede gestionar clientes</p>
+      </div>
+    );
   }
 
   return (
@@ -571,6 +623,62 @@ export default function ClientesPage() {
                   <span className="text-[10px] text-gray-400 mt-1">Toca para editar</span>
                 </div>
               </div>
+
+              {/* Create Admin button */}
+              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-xs text-gray-400">Admin del candidato</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAdminForm(showAdminForm === t.slug ? null : t.slug);
+                  }}
+                  className="text-xs text-primary-600 font-semibold hover:underline"
+                >
+                  {showAdminForm === t.slug ? "Cancelar" : "+ Crear Admin"}
+                </button>
+              </div>
+
+              {/* Admin creation form inline */}
+              {showAdminForm === t.slug && (
+                <div className="mt-3 p-3 bg-blue-50 rounded-xl space-y-3" onClick={(e) => e.stopPropagation()}>
+                  <p className="text-xs font-semibold text-blue-800">Crear admin para {t.candidate_name || t.name}</p>
+                  <Input
+                    placeholder="DNI del admin"
+                    value={adminDni}
+                    onChange={(e) => setAdminDni(e.target.value.replace(/\D/g, ""))}
+                    inputMode="numeric"
+                    maxLength={15}
+                  />
+                  <Input
+                    placeholder="Nombre completo"
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                  />
+                  <Input
+                    placeholder="Teléfono (opcional)"
+                    value={adminPhone}
+                    onChange={(e) => setAdminPhone(e.target.value)}
+                    inputMode="tel"
+                  />
+                  <Input
+                    type="password"
+                    placeholder="PIN de 6 dígitos"
+                    value={adminPin}
+                    onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    inputMode="numeric"
+                    maxLength={6}
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={handleCreateAdmin}
+                    loading={savingAdmin}
+                    disabled={!adminDni.trim() || !adminName.trim() || adminPin.length !== 6}
+                  >
+                    Crear Admin
+                  </Button>
+                </div>
+              )}
             </Card>
           ))}
         </div>

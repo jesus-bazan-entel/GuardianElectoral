@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
+import { useTenantContext } from "@/components/TenantProvider";
 import Link from "next/link";
 
 interface ClienteSummary {
@@ -23,19 +25,24 @@ interface ClienteSummary {
 }
 
 export default function AdminPage() {
+  const { session, tenant, logout } = useTenantContext();
   const [clientes, setClientes] = useState<ClienteSummary[]>([]);
   const [stats, setStats] = useState({ totalCentros: 0, totalMesas: 0, totalElectores: 0 });
   const supabase = createClient();
+
+  const isSuperAdmin = session?.role === "superadmin";
 
   useEffect(() => {
     loadData();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
-    const { data: clientesData } = await supabase
-      .from("admin_clientes")
-      .select("*");
-    if (clientesData) setClientes(clientesData);
+    if (isSuperAdmin) {
+      const { data: clientesData } = await supabase
+        .from("admin_clientes")
+        .select("*");
+      if (clientesData) setClientes(clientesData);
+    }
 
     const { data: distData } = await supabase
       .from("electoral_districts")
@@ -56,32 +63,46 @@ export default function AdminPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Panel Administrativo</h1>
-          <p className="text-sm text-gray-500">Guardian Electoral - Gestión de clientes</p>
+          <h1 className="text-xl font-bold text-gray-900">
+            {isSuperAdmin ? "Panel Superadmin" : "Panel Administrativo"}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {isSuperAdmin
+              ? "Guardian Electoral - Plataforma global"
+              : `${tenant?.candidate_name || tenant?.name || "Guardian Electoral"}`
+            }
+          </p>
         </div>
+        <Button variant="ghost" size="sm" onClick={logout} className="text-gray-400">
+          Salir
+        </Button>
       </div>
 
-      {/* Stats generales */}
+      {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
+        {isSuperAdmin && (
+          <Card className="text-center">
+            <p className="text-2xl font-bold text-primary-700">{clientes.length}</p>
+            <p className="text-xs text-gray-500">Clientes activos</p>
+          </Card>
+        )}
         <Card className="text-center">
-          <p className="text-2xl font-bold text-primary-700">{clientes.length}</p>
-          <p className="text-xs text-gray-500">Clientes activos</p>
+          <p className="text-2xl font-bold text-green-600">{isSuperAdmin ? totalPersoneros : "--"}</p>
+          <p className="text-xs text-gray-500">Personeros</p>
         </Card>
         <Card className="text-center">
-          <p className="text-2xl font-bold text-green-600">{totalPersoneros}</p>
-          <p className="text-xs text-gray-500">Personeros totales</p>
+          <p className="text-2xl font-bold text-guardian-gold">{isSuperAdmin ? totalActas : "--"}</p>
+          <p className="text-xs text-gray-500">Actas recibidas</p>
         </Card>
-        <Card className="text-center">
-          <p className="text-2xl font-bold text-guardian-gold">{totalActas}</p>
-          <p className="text-xs text-gray-500">Actas subidas</p>
-        </Card>
-        <Card className="text-center">
-          <p className="text-2xl font-bold text-gray-700">{stats.totalMesas.toLocaleString()}</p>
-          <p className="text-xs text-gray-500">Mesas nacionales</p>
-        </Card>
+        {!isSuperAdmin && (
+          <Card className="text-center">
+            <p className="text-2xl font-bold text-gray-700">{stats.totalMesas.toLocaleString()}</p>
+            <p className="text-xs text-gray-500">Mesas del distrito</p>
+          </Card>
+        )}
       </div>
 
-      {/* Monitor CTA - Full width premium card */}
+      {/* Monitor CTA */}
       <Link href="/admin/monitor">
         <Card className="bg-gradient-to-r from-gray-900 to-gray-800 text-white border-0 hover:shadow-xl transition-shadow cursor-pointer overflow-hidden relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -109,15 +130,18 @@ export default function AdminPage() {
 
       {/* Acciones */}
       <div className="grid grid-cols-2 gap-3">
-        <Link href="/admin/clientes">
-          <Card className="text-center hover:shadow-md transition-shadow cursor-pointer">
-            <svg className="w-8 h-8 mx-auto text-primary-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            <p className="font-semibold text-sm text-gray-900">Gestionar Clientes</p>
-            <p className="text-xs text-gray-500 mt-0.5">Alta de candidatos</p>
-          </Card>
-        </Link>
+        {/* Gestionar Clientes - SOLO SUPERADMIN */}
+        {isSuperAdmin && (
+          <Link href="/admin/clientes">
+            <Card className="text-center hover:shadow-md transition-shadow cursor-pointer">
+              <svg className="w-8 h-8 mx-auto text-primary-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <p className="font-semibold text-sm text-gray-900">Gestionar Clientes</p>
+              <p className="text-xs text-gray-500 mt-0.5">Candidatos y partidos</p>
+            </Card>
+          </Link>
+        )}
         <Link href="/admin/actas">
           <Card className="text-center hover:shadow-md transition-shadow cursor-pointer">
             <svg className="w-8 h-8 mx-auto text-guardian-gold mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -138,35 +162,37 @@ export default function AdminPage() {
         </Link>
       </div>
 
-      {/* Lista de clientes */}
-      {clientes.length > 0 && (
+      {/* Lista de clientes - SOLO SUPERADMIN */}
+      {isSuperAdmin && clientes.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-semibold text-gray-900">Clientes registrados</h3>
           {clientes.map((c) => (
-            <Card key={c.id}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-semibold text-gray-900">{c.candidato || c.nombre_cliente}</p>
-                  <p className="text-xs text-gray-500">{c.cargo || c.nombre_cliente}</p>
-                  {c.distrito_electoral && (
-                    <p className="text-xs text-primary-600 mt-0.5">{c.distrito_electoral}</p>
-                  )}
-                  <div className="flex gap-2 mt-2">
-                    <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{c.personeros_registrados} personeros</span>
-                    <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{c.actas_subidas} actas</span>
-                    <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{c.mesas_cubiertas} mesas</span>
+            <Link key={c.id} href="/admin/clientes">
+              <Card className="hover:shadow-md transition-shadow cursor-pointer mb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-gray-900">{c.candidato || c.nombre_cliente}</p>
+                    <p className="text-xs text-gray-500">{c.cargo || c.nombre_cliente}</p>
+                    {c.distrito_electoral && (
+                      <p className="text-xs text-primary-600 mt-0.5">{c.distrito_electoral}</p>
+                    )}
+                    <div className="flex gap-2 mt-2 flex-wrap">
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{c.personeros_registrados} personeros</span>
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{c.actas_subidas} actas</span>
+                      <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{c.mesas_cubiertas} mesas</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <Badge variant={c.pagado ? "success" : "warning"}>
+                      {c.pagado ? "Pagado" : "Pendiente"}
+                    </Badge>
+                    <Badge variant={c.alcance === "nacional" ? "info" : "default"}>
+                      {c.alcance === "nacional" ? "Nacional" : "Distrital"}
+                    </Badge>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <Badge variant={c.pagado ? "success" : "warning"}>
-                    {c.pagado ? "Pagado" : "Pendiente"}
-                  </Badge>
-                  <Badge variant={c.alcance === "nacional" ? "info" : "default"}>
-                    {c.alcance === "nacional" ? "Nacional" : "Distrital"}
-                  </Badge>
-                </div>
-              </div>
-            </Card>
+              </Card>
+            </Link>
           ))}
         </div>
       )}

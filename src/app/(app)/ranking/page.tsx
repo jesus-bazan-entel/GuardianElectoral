@@ -21,7 +21,7 @@ interface RankingEntry {
 
 export default function RankingPage() {
   const { session, tenant } = useTenantContext();
-  const isAdmin = session?.role === "admin" || session?.role === "coordinator";
+  const isAdmin = session?.role === "admin" || session?.role === "coordinator" || session?.role === "superadmin";
 
   const [ranking, setRanking] = useState<RankingEntry[]>([]);
   const [myStats, setMyStats] = useState({ mesas: 0, actas: 0, puntos: 0 });

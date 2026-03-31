@@ -97,8 +97,15 @@ export function BottomNav() {
   const pathname = usePathname();
   const { session } = useTenantContext();
 
-  const isAdmin = session?.role === "admin" || session?.role === "coordinator";
-  const items = isAdmin ? adminNavItems : navItems;
+  const isSuperAdmin = session?.role === "superadmin";
+  const isAdmin = session?.role === "admin" || session?.role === "coordinator" || isSuperAdmin;
+
+  // Superadmin: add Clientes tab. Regular admin: no Clientes tab
+  const items = !isAdmin
+    ? navItems
+    : isSuperAdmin
+    ? adminNavItems
+    : adminNavItems.filter((item) => item.href !== "/admin/clientes");
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-bottom z-50">
