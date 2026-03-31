@@ -101,13 +101,18 @@ export default function RegisterPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Registro exitoso!</h2>
+              <h2 className="text-xl font-bold text-gray-900">Registro enviado!</h2>
               <p className="text-sm text-gray-500 mt-2">
                 {hasCandidateInfo
                   ? <>Te registraste como personero de <strong>{tenant.candidate_name}</strong></>
                   : <>Bienvenido a <strong>{tenant?.name}</strong></>
                 }
               </p>
+              <div className="bg-amber-50 rounded-lg p-3 mt-3">
+                <p className="text-xs text-amber-800">
+                  <strong>Pendiente de aprobación:</strong> El administrador revisará tu registro y te asignará un centro de votación. Podrás ingresar cuando tu acceso sea habilitado.
+                </p>
+              </div>
               <p className="text-xs text-gray-400 mt-1">
                 DNI: <strong>{dni}</strong> — Recuerda tu PIN de {PIN_LENGTH} dígitos
               </p>
