@@ -10,7 +10,7 @@ import nextDynamic from "next/dynamic";
 const MonitorMap = nextDynamic(() => import("@/components/MonitorMap"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full bg-gray-900 flex items-center justify-center">
+    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
       <p className="text-gray-400 text-sm">Cargando mapa...</p>
     </div>
   ),
@@ -47,7 +47,6 @@ export default function MonitorPage() {
   const [showPanel, setShowPanel] = useState(false);
 
   const loadData = useCallback(async () => {
-    // Load active personeros (latest checkin per user with GPS)
     const { data: checkinsData } = await supabase
       .from("checkins")
       .select("user_id, lat, lng, timestamp")
@@ -65,66 +64,36 @@ export default function MonitorPage() {
           unique.push(c);
         }
       }
-
       const userIds = unique.map((c) => c.user_id);
       if (userIds.length > 0) {
-        const { data: personeroData } = await supabase
-          .from("personeros")
-          .select("id, full_name")
-          .in("id", userIds);
-
+        const { data: personeroData } = await supabase.from("personeros").select("id, full_name").in("id", userIds);
         const nameMap: Record<string, string> = {};
         personeroData?.forEach((p) => { nameMap[p.id] = p.full_name; });
-
         setActivePersoneros(unique.map((c) => ({
-          id: c.user_id,
-          full_name: nameMap[c.user_id] || "Personero",
-          lat: c.lat!,
-          lng: c.lng!,
-          timestamp: c.timestamp,
+          id: c.user_id, full_name: nameMap[c.user_id] || "Personero",
+          lat: c.lat!, lng: c.lng!, timestamp: c.timestamp,
         })));
       }
     }
 
-    // Stats
-    const { count: personerosCount } = await supabase
-      .from("personeros")
-      .select("*", { count: "exact", head: true })
-      .eq("is_registered", true);
+    const { count: personerosCount } = await supabase.from("personeros").select("*", { count: "exact", head: true }).eq("is_registered", true);
     setTotalPersoneros(personerosCount || 0);
 
-    const { data: actasData } = await supabase
-      .from("actas")
-      .select("mesa_id, centro_id, total_votes, created_at, user_id")
-      .order("created_at", { ascending: false });
-
+    const { data: actasData } = await supabase.from("actas").select("mesa_id, centro_id, total_votes, created_at, user_id").order("created_at", { ascending: false });
     if (actasData) {
       setTotalActas(actasData.length);
-      const uniqueMesas = new Set(actasData.map((a) => a.mesa_id));
-      setMesasCubiertas(uniqueMesas.size);
-
-      const actaUserIds = Array.from(new Set(actasData.slice(0, 10).map((a) => a.user_id)));
+      setMesasCubiertas(new Set(actasData.map((a) => a.mesa_id)).size);
+      const actaUserIds = Array.from(new Set(actasData.slice(0, 8).map((a) => a.user_id)));
       if (actaUserIds.length > 0) {
-        const { data: actaPersoneros } = await supabase
-          .from("personeros")
-          .select("id, full_name")
-          .in("id", actaUserIds);
-        const actaNameMap: Record<string, string> = {};
-        actaPersoneros?.forEach((p) => { actaNameMap[p.id] = p.full_name; });
-
-        setRecentActas(actasData.slice(0, 10).map((a) => ({
-          ...a,
-          personero_name: actaNameMap[a.user_id] || "Personero",
-        })));
+        const { data: ap } = await supabase.from("personeros").select("id, full_name").in("id", actaUserIds);
+        const nm: Record<string, string> = {};
+        ap?.forEach((p) => { nm[p.id] = p.full_name; });
+        setRecentActas(actasData.slice(0, 8).map((a) => ({ ...a, personero_name: nm[a.user_id] || "Personero" })));
       }
     }
 
-    const { data: distData } = await supabase
-      .from("electoral_districts")
-      .select("total_mesas");
-    if (distData) {
-      setTotalMesas(distData.reduce((s, d) => s + (d.total_mesas || 0), 0));
-    }
+    const { data: distData } = await supabase.from("electoral_districts").select("total_mesas");
+    if (distData) setTotalMesas(distData.reduce((s, d) => s + (d.total_mesas || 0), 0));
 
     setLastUpdate(new Date());
     setLoading(false);
@@ -136,49 +105,95 @@ export default function MonitorPage() {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // Only show personero markers (not all 10K centers)
   const mapMarkers = activePersoneros.map((p) => ({
-    id: `personero-${p.id}`,
-    lat: p.lat,
-    lng: p.lng,
-    type: "personero" as const,
-    color: "#22c55e",
-    popup: `
-      <div style="padding: 4px;">
-        <strong style="font-size: 13px;">${p.full_name}</strong><br/>
-        <span style="color: #22c55e; font-size: 11px;">Activo</span><br/>
-        <span style="font-size: 10px; color: #9ca3af;">${new Date(p.timestamp).toLocaleTimeString("es")}</span>
-      </div>
-    `,
+    id: `personero-${p.id}`, lat: p.lat, lng: p.lng, type: "personero" as const, color: "#2563eb",
+    popup: `<div style="padding:4px;"><strong>${p.full_name}</strong><br/><span style="color:#22c55e;font-size:11px;">Activo</span><br/><span style="font-size:10px;color:#9ca3af;">${new Date(p.timestamp).toLocaleTimeString("es")}</span></div>`,
   }));
 
   const coveragePercent = totalMesas > 0 ? ((mesasCubiertas / totalMesas) * 100).toFixed(1) : "0";
 
   return (
-    <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col">
-      {/* Top bar */}
-      <div className="bg-gray-900/95 backdrop-blur-sm border-b border-gray-800 px-4 py-2 flex items-center justify-between z-20 safe-top">
+    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center justify-between z-20 safe-top">
         <div className="flex items-center gap-3">
-          <Link href="/admin" className="text-gray-400 hover:text-white">
+          <Link href="/admin" className="text-gray-400 hover:text-gray-700">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
-            <h1 className="text-sm font-bold text-white">Monitoreo en Tiempo Real</h1>
-            <p className="text-[10px] text-gray-400">
-              {tenant?.name || "Guardian Electoral"} · {lastUpdate.toLocaleTimeString("es")}
-            </p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-bold text-gray-900">Monitoreo en Vivo</h1>
+              <span className="flex items-center gap-1 bg-green-50 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                EN VIVO
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-400">{lastUpdate.toLocaleTimeString("es")}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[10px] text-green-400 font-medium">EN VIVO</span>
-          <Button size="sm" variant="ghost" onClick={loadData} className="text-gray-400 hover:text-white ml-1">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </Button>
+        <Button size="sm" variant="ghost" onClick={loadData} className="text-gray-400">
+          <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </Button>
+      </div>
+
+      {/* KPI Strip - compact horizontal */}
+      <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 z-10">
+        <div className="flex items-center justify-between max-w-2xl mx-auto">
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 leading-none">{activePersoneros.length}<span className="text-[10px] text-gray-400 font-normal">/{totalPersoneros}</span></p>
+              <p className="text-[9px] text-gray-400">Activos</p>
+            </div>
+          </div>
+
+          <div className="w-px h-8 bg-gray-200" />
+
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 leading-none">{mesasCubiertas.toLocaleString()}<span className="text-[10px] text-gray-400 font-normal">/{totalMesas.toLocaleString()}</span></p>
+              <p className="text-[9px] text-gray-400">Mesas</p>
+            </div>
+          </div>
+
+          <div className="w-px h-8 bg-gray-200" />
+
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 leading-none">{totalActas}</p>
+              <p className="text-[9px] text-gray-400">Actas</p>
+            </div>
+          </div>
+
+          <div className="w-px h-8 bg-gray-200" />
+
+          <div className="flex items-center gap-1.5">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${Number(coveragePercent) > 50 ? "bg-green-100" : "bg-red-100"}`}>
+              <span className={`text-xs font-bold ${Number(coveragePercent) > 50 ? "text-green-600" : "text-red-600"}`}>%</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 leading-none">{coveragePercent}%</p>
+              <p className="text-[9px] text-gray-400">Cobertura</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -186,76 +201,54 @@ export default function MonitorPage() {
       <div className="flex-1 relative">
         {!loading && <MonitorMap markers={mapMarkers} />}
 
-        {/* KPI Cards - Floating over map */}
-        <div className="absolute top-3 left-3 right-3 z-[1000] pointer-events-none">
-          <div className="grid grid-cols-4 gap-2 pointer-events-auto">
-            <div className="bg-gray-900/90 backdrop-blur-sm rounded-xl p-2.5 border border-gray-700/50 shadow-lg">
-              <p className="text-[9px] text-gray-400 uppercase tracking-wider">Personeros</p>
-              <p className="text-xl font-black text-white leading-tight">{activePersoneros.length}</p>
-              <p className="text-[9px] text-gray-500">de {totalPersoneros}</p>
-            </div>
-            <div className="bg-gray-900/90 backdrop-blur-sm rounded-xl p-2.5 border border-gray-700/50 shadow-lg">
-              <p className="text-[9px] text-gray-400 uppercase tracking-wider">Mesas</p>
-              <p className="text-xl font-black text-blue-400 leading-tight">{mesasCubiertas.toLocaleString()}</p>
-              <p className="text-[9px] text-gray-500">de {totalMesas.toLocaleString()}</p>
-            </div>
-            <div className="bg-gray-900/90 backdrop-blur-sm rounded-xl p-2.5 border border-gray-700/50 shadow-lg">
-              <p className="text-[9px] text-gray-400 uppercase tracking-wider">Actas</p>
-              <p className="text-xl font-black text-amber-400 leading-tight">{totalActas}</p>
-              <p className="text-[9px] text-gray-500">recibidas</p>
-            </div>
-            <div className="bg-gray-900/90 backdrop-blur-sm rounded-xl p-2.5 border border-gray-700/50 shadow-lg">
-              <p className="text-[9px] text-gray-400 uppercase tracking-wider">Cobertura</p>
-              <p className="text-xl font-black text-green-400 leading-tight">{coveragePercent}%</p>
-              <p className="text-[9px] text-gray-500">del total</p>
-            </div>
+        {/* Legend - bottom right */}
+        <div className="absolute bottom-20 right-3 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md border border-gray-200">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-600 shadow-sm" style={{ boxShadow: "0 0 6px rgba(37,99,235,0.5)" }} />
+            <span className="text-[11px] text-gray-600 font-medium">Personero activo ({activePersoneros.length})</span>
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="absolute bottom-24 right-3 z-[1000] bg-gray-800/90 backdrop-blur-sm rounded-lg p-2 border border-gray-700/50 shadow-lg">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-[10px] text-gray-300">Personero activo ({activePersoneros.length})</span>
-          </div>
-        </div>
-
-        {/* Activity panel toggle */}
+        {/* Activity toggle */}
         <button
           onClick={() => setShowPanel(!showPanel)}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-gray-800/90 backdrop-blur-sm text-white px-4 py-2 rounded-full border border-gray-700/50 text-xs font-medium flex items-center gap-2 shadow-lg"
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white text-gray-700 px-4 py-2.5 rounded-full shadow-lg border border-gray-200 text-xs font-semibold flex items-center gap-2"
         >
-          <svg className={`w-4 h-4 transition-transform ${showPanel ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Actividad ({recentActas.length})
+          <svg className={`w-3 h-3 transition-transform ${showPanel ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
           </svg>
-          Actividad reciente ({recentActas.length})
         </button>
 
         {/* Activity panel */}
         {showPanel && (
-          <div className="absolute bottom-16 left-0 right-0 z-[999] max-h-[40vh] overflow-y-auto bg-gray-900/95 backdrop-blur-sm border-t border-gray-800 rounded-t-2xl shadow-2xl">
+          <div className="absolute bottom-16 left-0 right-0 z-[999] max-h-[45vh] overflow-y-auto bg-white border-t border-gray-200 rounded-t-2xl shadow-2xl">
             <div className="p-4">
-              <h3 className="text-sm font-bold text-white mb-3">Actividad Reciente</h3>
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-3" />
+              <h3 className="text-sm font-bold text-gray-900 mb-3">Actividad Reciente</h3>
               {recentActas.length === 0 ? (
-                <p className="text-gray-500 text-xs text-center py-4">No hay actividad reciente</p>
+                <p className="text-gray-400 text-xs text-center py-6">Sin actividad reciente</p>
               ) : (
                 <div className="space-y-2">
                   {recentActas.map((acta, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-gray-800/50 rounded-lg p-2.5">
-                      <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                        <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-white font-medium truncate">
-                          Mesa {acta.mesa_id} — {acta.personero_name}
+                        <p className="text-xs text-gray-900 font-semibold truncate">
+                          Mesa {acta.mesa_id}
                         </p>
-                        <p className="text-[10px] text-gray-400">
-                          {acta.total_votes?.toLocaleString()} votos · {acta.centro_id || ""}
+                        <p className="text-[10px] text-gray-500 truncate">
+                          {acta.personero_name} · {acta.total_votes?.toLocaleString()} votos
                         </p>
                       </div>
-                      <p className="text-[10px] text-gray-500 shrink-0">
+                      <p className="text-[10px] text-gray-400 shrink-0 font-medium">
                         {new Date(acta.created_at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>

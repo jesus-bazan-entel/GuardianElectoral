@@ -52,8 +52,8 @@ export default function MonitorMap({ markers, center = [-9.19, -75.015], zoom = 
       attributionControl: false,
     });
 
-    // Dark-style map tiles for premium look
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    // Light map tiles for better visibility
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
     }).addTo(map);
 
