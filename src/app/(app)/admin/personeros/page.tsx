@@ -216,13 +216,48 @@ export default function PersonerosAdminPage() {
                   <Badge variant={p.is_active ? "success" : "warning"}>
                     {p.is_active ? "Activo" : "Pendiente"}
                   </Badge>
+                  {p.is_active && !p.assigned_voting_center_id && (
+                    <Badge variant="danger">Sin centro</Badge>
+                  )}
                   {p.is_active ? (
-                    <button
-                      onClick={() => handleDeactivate(p.id)}
-                      className="text-[10px] text-red-500 hover:underline mt-1"
-                    >
-                      Desactivar
-                    </button>
+                    <div className="flex flex-col items-end gap-0.5 mt-1">
+                      {!p.assigned_voting_center_id && (
+                        <button
+                          onClick={() => {
+                            setActivatingId(activatingId === p.id ? null : p.id);
+                            setSelectedCenter("");
+                            setSelectedMesa("");
+                            setCenterSearch("");
+                            setCenters([]);
+                            setError(null);
+                          }}
+                          className="text-xs text-primary-600 font-semibold hover:underline"
+                        >
+                          {activatingId === p.id ? "Cancelar" : "Asignar centro"}
+                        </button>
+                      )}
+                      {p.assigned_voting_center_id && (
+                        <button
+                          onClick={() => {
+                            setActivatingId(activatingId === p.id ? null : p.id);
+                            setSelectedCenter("");
+                            setSelectedMesa("");
+                            setCenterSearch("");
+                            setCenters([]);
+                            setError(null);
+                          }}
+                          className="text-[10px] text-gray-500 hover:underline"
+                        >
+                          {activatingId === p.id ? "Cancelar" : "Cambiar centro"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeactivate(p.id)}
+                        className="text-[10px] text-red-500 hover:underline"
+                      >
+                        Desactivar
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => {
@@ -295,7 +330,7 @@ export default function PersonerosAdminPage() {
                     loading={saving}
                     disabled={!selectedCenter}
                   >
-                    Activar y asignar centro
+                    {p.is_active ? "Guardar centro asignado" : "Activar y asignar centro"}
                   </Button>
                 </div>
               )}
