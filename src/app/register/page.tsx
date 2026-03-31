@@ -13,7 +13,7 @@ export default function RegisterPage() {
   const { tenant, register, loading: tenantLoading } = useTenantContext();
   const router = useRouter();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [dni, setDni] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -24,6 +24,7 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false);
 
   const primaryColor = tenant?.primary_color || "#1e40af";
+  const hasCandidateInfo = !!tenant?.candidate_name;
 
   function handleNext() {
     setError(null);
@@ -68,6 +69,24 @@ export default function RegisterPage() {
     );
   }
 
+  // No tenant found — show error
+  if (!tenantLoading && !tenant) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-100">
+        <Card className="max-w-sm w-full text-center">
+          <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h2 className="text-lg font-bold text-gray-900">Campaña no encontrada</h2>
+          <p className="text-sm text-gray-500 mt-2">
+            Esta URL no está asociada a ninguna campaña electoral.
+            Verifica el enlace que te compartieron.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   if (success) {
     return (
       <div
@@ -84,7 +103,10 @@ export default function RegisterPage() {
               </div>
               <h2 className="text-xl font-bold text-gray-900">Registro exitoso!</h2>
               <p className="text-sm text-gray-500 mt-2">
-                Bienvenido a <strong>{tenant?.name || "Guardian Electoral"}</strong>
+                {hasCandidateInfo
+                  ? <>Te registraste como personero de <strong>{tenant.candidate_name}</strong></>
+                  : <>Bienvenido a <strong>{tenant?.name}</strong></>
+                }
               </p>
               <p className="text-xs text-gray-400 mt-1">
                 DNI: <strong>{dni}</strong> — Recuerda tu PIN de {PIN_LENGTH} dígitos
@@ -108,12 +130,34 @@ export default function RegisterPage() {
       style={{ background: `linear-gradient(to bottom, ${primaryColor}, ${primaryColor}dd)` }}
     >
       <div className="w-full max-w-sm">
-        {/* Header */}
+        {/* Header with candidate info */}
         <div className="text-center mb-6">
-          <h1 className="text-xl font-bold text-white">
-            {tenant?.name || "Guardian Electoral"}
-          </h1>
-          <p className="text-white/60 text-sm mt-1">Registro de Personero</p>
+          {tenant?.logo_url ? (
+            <img src={tenant.logo_url} alt="" className="w-16 h-16 mx-auto mb-3 rounded-xl object-contain bg-white/10 p-1" />
+          ) : (
+            <div className="w-16 h-16 bg-white/10 backdrop-blur-sm rounded-xl mx-auto mb-3 flex items-center justify-center">
+              <svg className="w-9 h-9 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
+            </div>
+          )}
+
+          {hasCandidateInfo ? (
+            <>
+              <h1 className="text-xl font-bold text-white">{tenant.candidate_name}</h1>
+              {tenant.candidate_position && (
+                <p className="text-white/80 text-sm mt-0.5">{tenant.candidate_position}</p>
+              )}
+              <p className="text-white/50 text-xs mt-1">{tenant.name}</p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-white">{tenant?.name}</h1>
+              <p className="text-white/60 text-sm mt-1">
+                {tenant?.welcome_message || "Registro de Personero"}
+              </p>
+            </>
+          )}
         </div>
 
         {/* Steps indicator */}
@@ -139,6 +183,20 @@ export default function RegisterPage() {
         </div>
 
         <Card>
+          {/* Candidate banner inside card */}
+          {hasCandidateInfo && step === 1 && (
+            <div
+              className="rounded-xl p-3 mb-4 text-center"
+              style={{ backgroundColor: `${primaryColor}10`, borderLeft: `4px solid ${primaryColor}` }}
+            >
+              <p className="text-xs text-gray-500">Te registras como personero de</p>
+              <p className="text-sm font-bold text-gray-900">{tenant.candidate_name}</p>
+              {tenant.candidate_position && (
+                <p className="text-xs text-gray-500">{tenant.candidate_position}</p>
+              )}
+            </div>
+          )}
+
           {/* Step 1: Personal Info */}
           {step === 1 && (
             <div className="space-y-4">
@@ -228,7 +286,7 @@ export default function RegisterPage() {
               <Button
                 variant="secondary"
                 className="flex-1"
-                onClick={() => { setStep((s) => (s - 1) as 1 | 2); setError(null); }}
+                onClick={() => { setStep(1); setError(null); }}
               >
                 Atrás
               </Button>

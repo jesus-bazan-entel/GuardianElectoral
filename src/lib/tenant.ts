@@ -7,6 +7,8 @@ export interface TenantInfo {
   primary_color: string;
   secondary_color: string;
   welcome_message: string;
+  candidate_name: string | null;
+  candidate_position: string | null;
 }
 
 export interface SessionInfo {
