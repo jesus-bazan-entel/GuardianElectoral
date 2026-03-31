@@ -16,12 +16,15 @@ const MonitorMap = nextDynamic(() => import("@/components/MonitorMap"), {
   ),
 });
 
-interface ActivePersonero {
+interface PersoneroOnMap {
   id: string;
   full_name: string;
+  dni: string;
+  has_checkin: boolean;
   lat: number;
   lng: number;
-  timestamp: string;
+  centro_name: string | null;
+  checkin_time: string | null;
 }
 
 interface ActaInfo {
@@ -36,7 +39,7 @@ export default function MonitorPage() {
   const { tenant } = useTenantContext();
   const supabase = createClient();
 
-  const [activePersoneros, setActivePersoneros] = useState<ActivePersonero[]>([]);
+  const [personerosOnMap, setPersonerosOnMap] = useState<PersoneroOnMap[]>([]);
   const [recentActas, setRecentActas] = useState<ActaInfo[]>([]);
   const [totalPersoneros, setTotalPersoneros] = useState(0);
   const [totalMesas, setTotalMesas] = useState(0);
@@ -47,42 +50,97 @@ export default function MonitorPage() {
   const [showPanel, setShowPanel] = useState(false);
 
   const loadData = useCallback(async () => {
+    // 1. Get all ACTIVE personeros with their assigned center coordinates
+    const { data: activePersoneros } = await supabase
+      .from("personeros")
+      .select("id, full_name, dni, assigned_centro, assigned_voting_center_id")
+      .eq("is_active", true)
+      .eq("is_registered", true)
+      .eq("role", "watcher");
+
+    // 2. Get latest checkin per personero
     const { data: checkinsData } = await supabase
       .from("checkins")
       .select("user_id, lat, lng, timestamp")
       .eq("type", "checkin")
       .not("lat", "is", null)
       .order("timestamp", { ascending: false })
-      .limit(500);
+      .limit(1000);
 
+    // Build checkin map: user_id → latest checkin
+    const checkinMap: Record<string, { lat: number; lng: number; timestamp: string }> = {};
     if (checkinsData) {
-      const seen = new Set<string>();
-      const unique: typeof checkinsData = [];
       for (const c of checkinsData) {
-        if (!seen.has(c.user_id) && c.lat && c.lng) {
-          seen.add(c.user_id);
-          unique.push(c);
+        if (!checkinMap[c.user_id] && c.lat && c.lng) {
+          checkinMap[c.user_id] = { lat: c.lat, lng: c.lng, timestamp: c.timestamp };
         }
-      }
-      const userIds = unique.map((c) => c.user_id);
-      if (userIds.length > 0) {
-        const { data: personeroData } = await supabase.from("personeros").select("id, full_name").in("id", userIds);
-        const nameMap: Record<string, string> = {};
-        personeroData?.forEach((p) => { nameMap[p.id] = p.full_name; });
-        setActivePersoneros(unique.map((c) => ({
-          id: c.user_id, full_name: nameMap[c.user_id] || "Personero",
-          lat: c.lat!, lng: c.lng!, timestamp: c.timestamp,
-        })));
       }
     }
 
-    const { count: personerosCount } = await supabase.from("personeros").select("*", { count: "exact", head: true }).eq("is_registered", true);
-    setTotalPersoneros(personerosCount || 0);
+    // 3. Get voting center coordinates for personeros WITHOUT checkin
+    const centerIds = new Set<string>();
+    activePersoneros?.forEach((p) => {
+      if (!checkinMap[p.id] && p.assigned_voting_center_id) {
+        centerIds.add(p.assigned_voting_center_id);
+      }
+    });
 
-    const { data: actasData } = await supabase.from("actas").select("mesa_id, centro_id, total_votes, created_at, user_id").order("created_at", { ascending: false });
+    const centerCoords: Record<string, { lat: number; lng: number; name: string }> = {};
+    if (centerIds.size > 0) {
+      const { data: centersData } = await supabase
+        .from("voting_centers")
+        .select("id, name, latitude, longitude")
+        .in("id", Array.from(centerIds));
+      centersData?.forEach((c) => {
+        if (c.latitude && c.longitude) {
+          centerCoords[c.id] = { lat: Number(c.latitude), lng: Number(c.longitude), name: c.name };
+        }
+      });
+    }
+
+    // 4. Build personeros on map
+    const mapped: PersoneroOnMap[] = [];
+    activePersoneros?.forEach((p) => {
+      const checkin = checkinMap[p.id];
+      if (checkin) {
+        // Has checkin → blue pin at checkin location
+        mapped.push({
+          id: p.id,
+          full_name: p.full_name,
+          dni: p.dni,
+          has_checkin: true,
+          lat: checkin.lat,
+          lng: checkin.lng,
+          centro_name: p.assigned_centro,
+          checkin_time: checkin.timestamp,
+        });
+      } else if (p.assigned_voting_center_id && centerCoords[p.assigned_voting_center_id]) {
+        // No checkin but has center → red pin at center location
+        const center = centerCoords[p.assigned_voting_center_id];
+        mapped.push({
+          id: p.id,
+          full_name: p.full_name,
+          dni: p.dni,
+          has_checkin: false,
+          lat: center.lat,
+          lng: center.lng,
+          centro_name: center.name,
+          checkin_time: null,
+        });
+      }
+    });
+    setPersonerosOnMap(mapped);
+    setTotalPersoneros(activePersoneros?.length || 0);
+
+    // 5. Actas stats
+    const { data: actasData } = await supabase
+      .from("actas")
+      .select("mesa_id, centro_id, total_votes, created_at, user_id")
+      .order("created_at", { ascending: false });
     if (actasData) {
       setTotalActas(actasData.length);
       setMesasCubiertas(new Set(actasData.map((a) => a.mesa_id)).size);
+
       const actaUserIds = Array.from(new Set(actasData.slice(0, 8).map((a) => a.user_id)));
       if (actaUserIds.length > 0) {
         const { data: ap } = await supabase.from("personeros").select("id, full_name").in("id", actaUserIds);
@@ -92,6 +150,7 @@ export default function MonitorPage() {
       }
     }
 
+    // 6. Total mesas
     const { data: distData } = await supabase.from("electoral_districts").select("total_mesas");
     if (distData) setTotalMesas(distData.reduce((s, d) => s + (d.total_mesas || 0), 0));
 
@@ -105,9 +164,26 @@ export default function MonitorPage() {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  const mapMarkers = activePersoneros.map((p) => ({
-    id: `personero-${p.id}`, lat: p.lat, lng: p.lng, type: "personero" as const, color: "#2563eb",
-    popup: `<div style="padding:4px;"><strong>${p.full_name}</strong><br/><span style="color:#22c55e;font-size:11px;">Activo</span><br/><span style="font-size:10px;color:#9ca3af;">${new Date(p.timestamp).toLocaleTimeString("es")}</span></div>`,
+  const checkedInCount = personerosOnMap.filter((p) => p.has_checkin).length;
+  const notCheckedInCount = personerosOnMap.filter((p) => !p.has_checkin).length;
+
+  // Build map markers
+  const mapMarkers = personerosOnMap.map((p) => ({
+    id: `personero-${p.id}`,
+    lat: p.lat,
+    lng: p.lng,
+    type: "personero" as const,
+    color: p.has_checkin ? "#2563eb" : "#dc2626",
+    popup: `
+      <div style="padding:4px;min-width:160px;">
+        <strong style="font-size:13px;">${p.full_name}</strong><br/>
+        <span style="font-size:11px;color:#6b7280;">DNI: ${p.dni}</span><br/>
+        ${p.centro_name ? `<span style="font-size:11px;color:#6b7280;">${p.centro_name}</span><br/>` : ""}
+        <span style="font-size:11px;font-weight:600;color:${p.has_checkin ? "#2563eb" : "#dc2626"};">
+          ${p.has_checkin ? `Check-in: ${new Date(p.checkin_time!).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}` : "Sin check-in"}
+        </span>
+      </div>
+    `,
   }));
 
   const coveragePercent = totalMesas > 0 ? ((mesasCubiertas / totalMesas) * 100).toFixed(1) : "0";
@@ -140,18 +216,28 @@ export default function MonitorPage() {
         </Button>
       </div>
 
-      {/* KPI Strip - compact horizontal */}
+      {/* KPI Strip */}
       <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 z-10">
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           <div className="flex items-center gap-1.5">
             <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
-              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <div className="w-3 h-3 rounded-full bg-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900 leading-none">{activePersoneros.length}<span className="text-[10px] text-gray-400 font-normal">/{totalPersoneros}</span></p>
-              <p className="text-[9px] text-gray-400">Activos</p>
+              <p className="text-sm font-bold text-gray-900 leading-none">{checkedInCount}</p>
+              <p className="text-[9px] text-gray-400">Presentes</p>
+            </div>
+          </div>
+
+          <div className="w-px h-8 bg-gray-200" />
+
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center">
+              <div className="w-3 h-3 rounded-full bg-red-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 leading-none">{notCheckedInCount}</p>
+              <p className="text-[9px] text-gray-400">Ausentes</p>
             </div>
           </div>
 
@@ -164,7 +250,7 @@ export default function MonitorPage() {
               </svg>
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900 leading-none">{mesasCubiertas.toLocaleString()}<span className="text-[10px] text-gray-400 font-normal">/{totalMesas.toLocaleString()}</span></p>
+              <p className="text-sm font-bold text-gray-900 leading-none">{mesasCubiertas}<span className="text-[10px] text-gray-400 font-normal">/{totalMesas.toLocaleString()}</span></p>
               <p className="text-[9px] text-gray-400">Mesas</p>
             </div>
           </div>
@@ -185,27 +271,33 @@ export default function MonitorPage() {
 
           <div className="w-px h-8 bg-gray-200" />
 
-          <div className="flex items-center gap-1.5">
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${Number(coveragePercent) > 50 ? "bg-green-100" : "bg-red-100"}`}>
-              <span className={`text-xs font-bold ${Number(coveragePercent) > 50 ? "text-green-600" : "text-red-600"}`}>%</span>
-            </div>
-            <div>
-              <p className="text-sm font-bold text-gray-900 leading-none">{coveragePercent}%</p>
-              <p className="text-[9px] text-gray-400">Cobertura</p>
-            </div>
+          <div className="text-right">
+            <p className="text-sm font-bold text-green-600 leading-none">{coveragePercent}%</p>
+            <p className="text-[9px] text-gray-400">Cobertura</p>
           </div>
         </div>
       </div>
 
       {/* Map */}
       <div className="flex-1 relative">
-        {!loading && <MonitorMap markers={mapMarkers} />}
+        {!loading && (
+          <MonitorMap
+            markers={mapMarkers}
+            center={[-9.19, -75.015]}
+            zoom={6}
+          />
+        )}
 
-        {/* Legend - bottom right */}
-        <div className="absolute bottom-20 right-3 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md border border-gray-200">
+        {/* Legend */}
+        <div className="absolute bottom-20 right-3 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2.5 shadow-md border border-gray-200">
+          <p className="text-[10px] text-gray-500 font-semibold mb-1.5 uppercase tracking-wider">Personeros</p>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-3 h-3 rounded-full bg-blue-600 shadow-sm" />
+            <span className="text-[11px] text-gray-600">Con check-in ({checkedInCount})</span>
+          </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-600 shadow-sm" style={{ boxShadow: "0 0 6px rgba(37,99,235,0.5)" }} />
-            <span className="text-[11px] text-gray-600 font-medium">Personero activo ({activePersoneros.length})</span>
+            <div className="w-3 h-3 rounded-full bg-red-600 shadow-sm" />
+            <span className="text-[11px] text-gray-600">Sin check-in ({notCheckedInCount})</span>
           </div>
         </div>
 
@@ -241,12 +333,8 @@ export default function MonitorPage() {
                         </svg>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-900 font-semibold truncate">
-                          Mesa {acta.mesa_id}
-                        </p>
-                        <p className="text-[10px] text-gray-500 truncate">
-                          {acta.personero_name} · {acta.total_votes?.toLocaleString()} votos
-                        </p>
+                        <p className="text-xs text-gray-900 font-semibold truncate">Mesa {acta.mesa_id}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{acta.personero_name} · {acta.total_votes?.toLocaleString()} votos</p>
                       </div>
                       <p className="text-[10px] text-gray-400 shrink-0 font-medium">
                         {new Date(acta.created_at).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}

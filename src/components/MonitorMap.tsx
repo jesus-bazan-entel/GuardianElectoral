@@ -114,17 +114,16 @@ export default function MonitorMap({ markers, center = [-9.19, -75.015], zoom = 
     });
   }, [markers, L, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fit bounds when markers change
+  // Fit bounds when markers change (only if many markers, otherwise keep initial view)
   useEffect(() => {
     if (!L || !mapInstanceRef.current || !loaded || markers.length === 0) return;
 
     const validMarkers = markers.filter((m) => m.lat && m.lng);
-    if (validMarkers.length > 1) {
+    if (validMarkers.length > 3) {
       const bounds = L.latLngBounds(validMarkers.map((m) => [m.lat, m.lng]));
-      mapInstanceRef.current.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
-    } else if (validMarkers.length === 1) {
-      mapInstanceRef.current.setView([validMarkers[0].lat, validMarkers[0].lng], 13);
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
     }
+    // For 1-3 markers, keep the initial center/zoom (Peru view)
   }, [markers.length, L, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
