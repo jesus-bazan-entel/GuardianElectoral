@@ -13,11 +13,21 @@ import Link from "next/link";
 export default function DashboardPage() {
   const { pendingCount, syncing, isOnline, doSync } = useSync();
   const { session, tenant, logout } = useTenantContext();
+  const router = useRouter();
+
+  const isAdmin = session?.role === "admin" || session?.role === "coordinator";
+
+  // Redirect admin to admin panel
+  useEffect(() => {
+    if (isAdmin) {
+      router.replace("/admin");
+    }
+  }, [isAdmin, router]);
+
   const [lastCheckin, setLastCheckin] = useState<{ type: string; timestamp: string } | null>(null);
   const [actaCount, setActaCount] = useState(0);
   const [mesaCount, setMesaCount] = useState(0);
   const [puntos, setPuntos] = useState(0);
-  const router = useRouter();
 
   useEffect(() => {
     async function loadData() {
