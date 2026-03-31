@@ -125,11 +125,18 @@ export default function RegisterPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center p-6"
-      style={{ background: `linear-gradient(to bottom, ${primaryColor}, ${primaryColor}dd)` }}
-    >
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Background image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/bg-login.jpg')" }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{ background: `linear-gradient(to bottom, ${primaryColor}cc, ${primaryColor}ee)` }}
+      />
+
+      <div className="w-full max-w-sm relative z-10">
         {/* Header with candidate info */}
         <div className="text-center mb-6">
           {tenant?.logo_url ? (

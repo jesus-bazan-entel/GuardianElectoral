@@ -34,6 +34,7 @@ export default function LoginPage() {
   }
 
   const primaryColor = tenant?.primary_color || "#1e40af";
+  const hasCandidateInfo = !!tenant?.candidate_name;
 
   if (tenantLoading) {
     return (
@@ -50,18 +51,26 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center p-6"
-      style={{ background: `linear-gradient(to bottom, ${primaryColor}, ${primaryColor}dd)` }}
-    >
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Background image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/bg-login.jpg')" }}
+      />
+      {/* Dark overlay for readability */}
+      <div
+        className="absolute inset-0"
+        style={{ background: `linear-gradient(to bottom, ${primaryColor}cc, ${primaryColor}ee)` }}
+      />
+
+      <div className="w-full max-w-sm relative z-10">
         {/* Logo & Title */}
         <div className="text-center mb-8">
           {tenant?.logo_url ? (
             <img
               src={tenant.logo_url}
               alt={tenant.name}
-              className="w-20 h-20 mx-auto mb-4 rounded-2xl object-contain bg-white/10 p-2"
+              className="w-20 h-20 mx-auto mb-4 rounded-2xl object-contain bg-white/10 backdrop-blur-sm p-2"
             />
           ) : (
             <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-2xl mx-auto mb-4 flex items-center justify-center">
@@ -70,16 +79,29 @@ export default function LoginPage() {
               </svg>
             </div>
           )}
-          <h1 className="text-2xl font-bold text-white">
-            {tenant?.name || "Guardian Electoral"}
-          </h1>
-          <p className="text-white/60 mt-1 text-sm">
-            {tenant?.welcome_message || "Control electoral en tiempo real"}
-          </p>
+
+          {hasCandidateInfo ? (
+            <>
+              <h1 className="text-2xl font-bold text-white">{tenant.candidate_name}</h1>
+              {tenant.candidate_position && (
+                <p className="text-white/80 text-sm mt-0.5">{tenant.candidate_position}</p>
+              )}
+              <p className="text-white/50 text-xs mt-1">{tenant.name}</p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-white">
+                {tenant?.name || "Guardian Electoral"}
+              </h1>
+              <p className="text-white/60 mt-1 text-sm">
+                {tenant?.welcome_message || "Control electoral en tiempo real"}
+              </p>
+            </>
+          )}
         </div>
 
         {/* Login Form */}
-        <Card>
+        <Card className="backdrop-blur-sm bg-white/95">
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="text-center mb-2">
               <h2 className="text-lg font-semibold text-gray-900">Iniciar Sesión</h2>
@@ -124,7 +146,7 @@ export default function LoginPage() {
             </Button>
 
             <div className="text-center pt-2 border-t border-gray-100">
-              <p className="text-sm text-gray-500">¿Primera vez?</p>
+              <p className="text-sm text-gray-500">Primera vez?</p>
               <Link
                 href="/register"
                 className="text-sm font-semibold hover:underline"
@@ -136,8 +158,8 @@ export default function LoginPage() {
           </form>
         </Card>
 
-        <p className="text-white/40 text-xs text-center mt-6">
-          Guardian Electoral v1.0
+        <p className="text-white/30 text-xs text-center mt-6">
+          Elecciones 2026 - Guardian Electoral v1.0
         </p>
       </div>
     </div>
