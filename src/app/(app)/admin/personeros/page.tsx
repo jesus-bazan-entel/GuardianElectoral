@@ -71,8 +71,9 @@ export default function PersonerosAdminPage() {
     const { data } = await supabase
       .from("voting_centers")
       .select("id, name, code, district, province, department, total_tables")
-      .or(`name.ilike.%${query}%,code.ilike.%${query}%,district.ilike.%${query}%`)
-      .limit(10);
+      .or(`name.ilike.%${query}%,code.ilike.%${query}%,district.ilike.%${query}%,province.ilike.%${query}%`)
+      .order("name")
+      .limit(20);
     if (data) setCenters(data);
   }
 
