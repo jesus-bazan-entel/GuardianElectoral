@@ -224,6 +224,36 @@ export default function MonitorPage() {
     setLocationResults([]);
   }
 
+  // Coordenadas conocidas de departamentos de Perú
+  const DEPT_COORDS: Record<string, { lat: number; lng: number }> = {
+    "Amazonas": { lat: -6.23, lng: -77.87 },
+    "Ancash": { lat: -9.53, lng: -77.53 },
+    "Apurimac": { lat: -14.05, lng: -72.88 },
+    "Arequipa": { lat: -16.41, lng: -71.54 },
+    "Ayacucho": { lat: -13.16, lng: -74.22 },
+    "Cajamarca": { lat: -7.16, lng: -78.52 },
+    "Callao": { lat: -12.06, lng: -77.13 },
+    "Cusco": { lat: -13.52, lng: -71.97 },
+    "Huancavelica": { lat: -12.79, lng: -74.97 },
+    "Huanuco": { lat: -9.93, lng: -76.24 },
+    "Ica": { lat: -14.07, lng: -75.73 },
+    "Junin": { lat: -12.07, lng: -75.21 },
+    "La Libertad": { lat: -8.11, lng: -79.02 },
+    "Lambayeque": { lat: -6.77, lng: -79.84 },
+    "Lima": { lat: -12.05, lng: -77.04 },
+    "Lima Provincias": { lat: -11.47, lng: -76.14 },
+    "Loreto": { lat: -3.75, lng: -73.25 },
+    "Madre de Dios": { lat: -12.59, lng: -69.19 },
+    "Moquegua": { lat: -17.19, lng: -70.94 },
+    "Pasco": { lat: -10.68, lng: -76.26 },
+    "Piura": { lat: -5.19, lng: -80.63 },
+    "Puno": { lat: -15.84, lng: -70.02 },
+    "San Martin": { lat: -6.49, lng: -76.37 },
+    "Tacna": { lat: -17.63, lng: -70.26 },
+    "Tumbes": { lat: -3.57, lng: -80.45 },
+    "Ucayali": { lat: -8.38, lng: -74.53 },
+  };
+
   async function zoomToLocation(type: "peru" | "department" | "province" | "district", name?: string) {
     if (type === "peru") {
       doFlyTo(-9.19, -75.015, 6);
@@ -232,9 +262,23 @@ export default function MonitorPage() {
     }
     if (!name) return;
 
-    // Extract just the first part if "District, Province" format
     const searchName = name.split(",")[0].trim();
-    const field = type === "department" ? "department" : type === "province" ? "province" : "district";
+
+    // For departments, use precalculated coordinates (faster and reliable)
+    if (type === "department") {
+      const coords = DEPT_COORDS[searchName];
+      if (coords) {
+        doFlyTo(coords.lat, coords.lng, 8);
+        setShowSearch(false);
+        setSearchQuery("");
+        setSearchResults([]);
+        setLocationResults([]);
+        return;
+      }
+    }
+
+    // For provinces/districts, search voting_centers
+    const field = type === "province" ? "province" : "district";
     const { data } = await supabase
       .from("voting_centers")
       .select("latitude, longitude")
@@ -248,7 +292,7 @@ export default function MonitorPage() {
       if (lats.length > 0) {
         const avgLat = lats.reduce((s, v) => s + v, 0) / lats.length;
         const avgLng = lngs.reduce((s, v) => s + v, 0) / lngs.length;
-        const zoomLevel = type === "department" ? 8 : type === "province" ? 10 : 13;
+        const zoomLevel = type === "province" ? 10 : 13;
         doFlyTo(avgLat, avgLng, zoomLevel);
       }
     }
