@@ -11,4 +11,4 @@ export const POINTS = {
   PER_ACTA: 5,
   PER_FULL_TOP3: 2,
 };
-// CI/CD pipeline verified
+// CI/CD auto-deploy active
