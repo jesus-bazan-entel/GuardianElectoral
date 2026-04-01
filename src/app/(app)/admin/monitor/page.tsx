@@ -43,6 +43,12 @@ export default function MonitorPage() {
   const [recentActas, setRecentActas] = useState<ActaInfo[]>([]);
   const [totalPersoneros, setTotalPersoneros] = useState(0);
   const [totalMesas, setTotalMesas] = useState(0);
+
+  // Search
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PersoneroOnMap[]>([]);
+  const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const [mesasCubiertas, setMesasCubiertas] = useState(0);
   const [totalActas, setTotalActas] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -163,6 +169,52 @@ export default function MonitorPage() {
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  // Search personeros
+  function handleSearch(query: string) {
+    setSearchQuery(query);
+    if (query.length < 2) { setSearchResults([]); return; }
+    const q = query.toLowerCase();
+    const results = personerosOnMap.filter(
+      (p) => p.full_name.toLowerCase().includes(q) || p.dni.includes(q) || (p.centro_name && p.centro_name.toLowerCase().includes(q))
+    );
+    setSearchResults(results);
+  }
+
+  function flyToPersonero(p: PersoneroOnMap) {
+    setFlyTo({ lat: p.lat, lng: p.lng, zoom: 16 });
+    setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  }
+
+  // Location zoom presets
+  async function zoomToLocation(type: "peru" | "department" | "province" | "district", name?: string) {
+    if (type === "peru") {
+      setFlyTo({ lat: -9.19, lng: -75.015, zoom: 6 });
+      setShowSearch(false);
+      return;
+    }
+    if (!name) return;
+    // Search voting_centers for the location to get center coordinates
+    const field = type === "department" ? "department" : type === "province" ? "province" : "district";
+    const { data } = await supabase
+      .from("voting_centers")
+      .select("latitude, longitude")
+      .ilike(field, name)
+      .not("latitude", "is", null)
+      .limit(100);
+
+    if (data && data.length > 0) {
+      const lats = data.map((d) => Number(d.latitude)).filter(Boolean);
+      const lngs = data.map((d) => Number(d.longitude)).filter(Boolean);
+      const avgLat = lats.reduce((s, v) => s + v, 0) / lats.length;
+      const avgLng = lngs.reduce((s, v) => s + v, 0) / lngs.length;
+      const zoomLevel = type === "department" ? 8 : type === "province" ? 10 : 13;
+      setFlyTo({ lat: avgLat, lng: avgLng, zoom: zoomLevel });
+    }
+    setShowSearch(false);
+  }
 
   const checkedInCount = personerosOnMap.filter((p) => p.has_checkin).length;
   const notCheckedInCount = personerosOnMap.filter((p) => !p.has_checkin).length;
@@ -285,7 +337,102 @@ export default function MonitorPage() {
             markers={mapMarkers}
             center={[-9.19, -75.015]}
             zoom={6}
+            flyTo={flyTo}
           />
+        )}
+
+        {/* Search button */}
+        <button
+          onClick={() => setShowSearch(!showSearch)}
+          className="absolute top-3 left-3 z-[1000] bg-white text-gray-700 w-10 h-10 rounded-xl shadow-lg border border-gray-200 flex items-center justify-center"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
+
+        {/* Reset zoom button */}
+        <button
+          onClick={() => setFlyTo({ lat: -9.19, lng: -75.015, zoom: 6 })}
+          className="absolute top-16 left-3 z-[1000] bg-white text-gray-500 w-10 h-10 rounded-xl shadow-lg border border-gray-200 flex items-center justify-center"
+          title="Ver todo Perú"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
+          </svg>
+        </button>
+
+        {/* Search panel */}
+        {showSearch && (
+          <div className="absolute top-3 left-16 right-3 z-[1000] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div className="p-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Buscar personero por nombre, DNI o centro..."
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                style={{ fontSize: "16px" }}
+                autoFocus
+              />
+            </div>
+
+            {/* Quick location zoom */}
+            <div className="px-3 pb-2 flex gap-1.5 flex-wrap">
+              <button onClick={() => zoomToLocation("peru")} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-1 rounded-md hover:bg-gray-200">
+                Perú
+              </button>
+              {["Lima", "Arequipa", "Cusco", "Piura", "La Libertad", "Junin", "Callao"].map((dep) => (
+                <button
+                  key={dep}
+                  onClick={() => zoomToLocation("department", dep)}
+                  className="text-[10px] bg-blue-50 text-blue-700 px-2 py-1 rounded-md hover:bg-blue-100"
+                >
+                  {dep}
+                </button>
+              ))}
+            </div>
+
+            {/* District search */}
+            {searchQuery.length >= 2 && searchResults.length === 0 && (
+              <div className="px-3 pb-2">
+                <button
+                  onClick={() => zoomToLocation("district", searchQuery)}
+                  className="w-full text-left text-xs bg-purple-50 text-purple-700 px-3 py-2 rounded-lg hover:bg-purple-100"
+                >
+                  Buscar distrito: <strong>{searchQuery}</strong> en el mapa
+                </button>
+              </div>
+            )}
+
+            {/* Personero results */}
+            {searchResults.length > 0 && (
+              <div className="max-h-60 overflow-y-auto border-t border-gray-100">
+                {searchResults.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => flyToPersonero(p)}
+                    className="w-full text-left px-3 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full shrink-0 ${p.has_checkin ? "bg-blue-600" : "bg-red-600"}`} />
+                      <div>
+                        <p className="text-xs font-semibold text-gray-900">{p.full_name}</p>
+                        <p className="text-[10px] text-gray-500">
+                          DNI: {p.dni} · {p.centro_name || "Sin centro"}
+                          {p.has_checkin ? " · Con check-in" : " · Sin check-in"}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {searchQuery.length >= 2 && searchResults.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-2">No se encontraron personeros</p>
+            )}
+          </div>
         )}
 
         {/* Legend */}

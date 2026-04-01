@@ -16,10 +16,11 @@ interface MonitorMapProps {
   markers: MapMarker[];
   center?: [number, number];
   zoom?: number;
+  flyTo?: { lat: number; lng: number; zoom: number } | null;
   onMarkerClick?: (marker: MapMarker) => void;
 }
 
-export default function MonitorMap({ markers, center = [-9.19, -75.015], zoom = 6, onMarkerClick }: MonitorMapProps) {
+export default function MonitorMap({ markers, center = [-9.19, -75.015], zoom = 6, flyTo, onMarkerClick }: MonitorMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
@@ -113,6 +114,12 @@ export default function MonitorMap({ markers, center = [-9.19, -75.015], zoom = 
       }
     });
   }, [markers, L, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // FlyTo when requested
+  useEffect(() => {
+    if (!mapInstanceRef.current || !loaded || !flyTo) return;
+    mapInstanceRef.current.flyTo([flyTo.lat, flyTo.lng], flyTo.zoom, { duration: 1.5 });
+  }, [flyTo?.lat, flyTo?.lng, flyTo?.zoom, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fit bounds when markers change (only if many markers, otherwise keep initial view)
   useEffect(() => {
