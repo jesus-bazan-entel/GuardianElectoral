@@ -11,3 +11,4 @@ export const POINTS = {
   PER_ACTA: 5,
   PER_FULL_TOP3: 2,
 };
+// Auto-deploy test Wed Apr  1 06:49:19 UTC 2026
