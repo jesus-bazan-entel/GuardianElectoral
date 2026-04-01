@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { db, type LocalActa } from "@/lib/db/indexed-db";
 import { useSync } from "@/hooks/useSync";
+import { useTenantContext } from "@/components/TenantProvider";
 import Link from "next/link";
 
 export default function ActaListPage() {
+  const { session } = useTenantContext();
   const [actas, setActas] = useState<LocalActa[]>([]);
   const [mesaId, setMesaId] = useState("");
   const [centroVotacion, setCentroVotacion] = useState("");
@@ -17,9 +19,15 @@ export default function ActaListPage() {
 
   useEffect(() => {
     loadActas();
-    const saved = localStorage.getItem("ge_centro_votacion");
-    if (saved) setCentroVotacion(saved);
-  }, []);
+    // Auto-fill from assigned centro, fallback to localStorage
+    if (session?.assigned_centro) {
+      setCentroVotacion(session.assigned_centro);
+      localStorage.setItem("ge_centro_votacion", session.assigned_centro);
+    } else {
+      const saved = localStorage.getItem("ge_centro_votacion");
+      if (saved) setCentroVotacion(saved);
+    }
+  }, [session?.assigned_centro]);
 
   async function loadActas() {
     const items = await db.actas.orderBy("createdAt").reverse().toArray();

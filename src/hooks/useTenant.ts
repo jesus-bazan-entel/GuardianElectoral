@@ -80,6 +80,8 @@ export function useTenant() {
         role?: string;
         tenant_id?: string;
         tenant_name?: string;
+        assigned_centro?: string;
+        assigned_mesa?: string;
       };
 
       if (!result.success) return { success: false, error: result.error };
@@ -90,6 +92,8 @@ export function useTenant() {
         role: result.role!,
         tenant_id: result.tenant_id!,
         tenant_slug: tenant.slug,
+        assigned_centro: result.assigned_centro || null,
+        assigned_mesa: result.assigned_mesa || null,
       };
 
       saveSession(sessionData);

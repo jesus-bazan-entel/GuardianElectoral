@@ -63,6 +63,12 @@ export default function DashboardPage() {
         <p className="text-sm text-gray-500">
           {tenant?.name || "Guardian Electoral"}
         </p>
+        {session?.assigned_centro && (
+          <p className="text-xs text-primary-600 mt-0.5">
+            Centro: {session.assigned_centro}
+            {session.assigned_mesa && ` · Mesa: ${session.assigned_mesa}`}
+          </p>
+        )}
       </div>
 
       {/* Status Card */}

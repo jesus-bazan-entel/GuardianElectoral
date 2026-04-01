@@ -17,6 +17,8 @@ export interface SessionInfo {
   role: string;
   tenant_id: string;
   tenant_slug: string;
+  assigned_centro: string | null;
+  assigned_mesa: string | null;
 }
 
 const SESSION_KEY = "ge_session";
