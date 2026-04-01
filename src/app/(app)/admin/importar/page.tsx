@@ -35,7 +35,7 @@ export default function ImportarPage() {
   const supabase = createClient();
 
   const [records, setRecords] = useState<CenterRecord[]>([]);
-  const [fileName, setFileName] = useState("");
+  const [fileNames, setFileNames] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,33 +44,42 @@ export default function ImportarPage() {
   const isSuperAdmin = session?.role === "superadmin";
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    setFileName(file.name);
     setResult(null);
     setError(null);
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target?.result as string);
-        if (!Array.isArray(data)) throw new Error("El archivo debe contener un array JSON");
-        if (data.length === 0) throw new Error("El archivo está vacío");
+    const selectedFiles = Array.from(files).slice(0, 5);
+    const names: string[] = [];
+    let allRecords: CenterRecord[] = [];
+    let filesRead = 0;
 
-        // Validate structure
-        const first = data[0];
-        if (!first.name || !first.department || !first.district) {
-          throw new Error("Cada registro debe tener: name, department, province, district, address");
+    selectedFiles.forEach((file) => {
+      names.push(file.name);
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target?.result as string);
+          if (!Array.isArray(data)) throw new Error(`${file.name}: debe contener un array JSON`);
+          if (data.length > 0) {
+            const first = data[0];
+            if (!first.name || !first.department || !first.district) {
+              throw new Error(`${file.name}: cada registro debe tener name, department, province, district, address`);
+            }
+            allRecords = [...allRecords, ...data];
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Error al leer archivo");
         }
-
-        setRecords(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error al leer el archivo");
-        setRecords([]);
-      }
-    };
-    reader.readAsText(file);
+        filesRead++;
+        if (filesRead === selectedFiles.length) {
+          setRecords(allRecords);
+          setFileNames(names);
+        }
+      };
+      reader.readAsText(file);
+    });
   }
 
   async function handleImport() {
@@ -210,15 +219,19 @@ export default function ImportarPage() {
             <svg className="w-10 h-10 mx-auto text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
-            {fileName ? (
-              <p className="text-sm text-primary-700 font-medium">{fileName}</p>
+            {fileNames.length > 0 ? (
+              <div>
+                <p className="text-sm text-primary-700 font-medium">{fileNames.length} archivo{fileNames.length > 1 ? "s" : ""} seleccionado{fileNames.length > 1 ? "s" : ""}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{fileNames.join(", ")}</p>
+              </div>
             ) : (
-              <p className="text-sm text-gray-500">Toca para seleccionar archivo JSON</p>
+              <p className="text-sm text-gray-500">Toca para seleccionar hasta 5 archivos JSON</p>
             )}
           </div>
           <input
             type="file"
             accept=".json,application/json"
+            multiple
             onChange={handleFileUpload}
             className="hidden"
           />
@@ -328,7 +341,7 @@ export default function ImportarPage() {
               <Button
                 variant="secondary"
                 className="flex-1"
-                onClick={() => { setRecords([]); setResult(null); setFileName(""); }}
+                onClick={() => { setRecords([]); setResult(null); setFileNames([]); }}
               >
                 Importar otro archivo
               </Button>
