@@ -48,7 +48,11 @@ export default function MonitorPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<PersoneroOnMap[]>([]);
-  const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
+  const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; zoom: number; ts?: number } | null>(null);
+
+  function doFlyTo(lat: number, lng: number, zoom: number) {
+    setFlyTo({ lat, lng, zoom, ts: Date.now() });
+  }
   const [mesasCubiertas, setMesasCubiertas] = useState(0);
   const [totalActas, setTotalActas] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -213,7 +217,7 @@ export default function MonitorPage() {
   }
 
   function flyToPersonero(p: PersoneroOnMap) {
-    setFlyTo({ lat: p.lat, lng: p.lng, zoom: 16 });
+    doFlyTo(p.lat, p.lng, 16);
     setShowSearch(false);
     setSearchQuery("");
     setSearchResults([]);
@@ -222,7 +226,7 @@ export default function MonitorPage() {
 
   async function zoomToLocation(type: "peru" | "department" | "province" | "district", name?: string) {
     if (type === "peru") {
-      setFlyTo({ lat: -9.19, lng: -75.015, zoom: 6 });
+      doFlyTo(-9.19, -75.015, 6);
       setShowSearch(false);
       return;
     }
@@ -245,7 +249,7 @@ export default function MonitorPage() {
         const avgLat = lats.reduce((s, v) => s + v, 0) / lats.length;
         const avgLng = lngs.reduce((s, v) => s + v, 0) / lngs.length;
         const zoomLevel = type === "department" ? 8 : type === "province" ? 10 : 13;
-        setFlyTo({ lat: avgLat, lng: avgLng, zoom: zoomLevel });
+        doFlyTo(avgLat, avgLng, zoomLevel);
       }
     }
     setShowSearch(false);
@@ -391,7 +395,7 @@ export default function MonitorPage() {
 
         {/* Reset zoom button */}
         <button
-          onClick={() => setFlyTo({ lat: -9.19, lng: -75.015, zoom: 6 })}
+          onClick={() => doFlyTo(-9.19, -75.015, 6)}
           className="absolute top-16 left-3 z-[1000] bg-white text-gray-500 w-10 h-10 rounded-xl shadow-lg border border-gray-200 flex items-center justify-center"
           title="Ver todo Perú"
         >

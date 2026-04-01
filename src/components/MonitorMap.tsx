@@ -16,7 +16,7 @@ interface MonitorMapProps {
   markers: MapMarker[];
   center?: [number, number];
   zoom?: number;
-  flyTo?: { lat: number; lng: number; zoom: number } | null;
+  flyTo?: { lat: number; lng: number; zoom: number; ts?: number } | null;
   onMarkerClick?: (marker: MapMarker) => void;
 }
 
@@ -119,7 +119,7 @@ export default function MonitorMap({ markers, center = [-9.19, -75.015], zoom = 
   useEffect(() => {
     if (!mapInstanceRef.current || !loaded || !flyTo) return;
     mapInstanceRef.current.flyTo([flyTo.lat, flyTo.lng], flyTo.zoom, { duration: 1.5 });
-  }, [flyTo?.lat, flyTo?.lng, flyTo?.zoom, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flyTo?.lat, flyTo?.lng, flyTo?.zoom, flyTo?.ts, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fit bounds when markers change (only if many markers, otherwise keep initial view)
   useEffect(() => {
