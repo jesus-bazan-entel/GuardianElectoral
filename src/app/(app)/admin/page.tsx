@@ -171,6 +171,17 @@ export default function AdminPage() {
             <p className="text-xs text-gray-500 mt-0.5">Tabla de posiciones</p>
           </Card>
         </Link>
+        {isSuperAdmin && (
+          <Link href="/admin/importar">
+            <Card className="text-center hover:shadow-md transition-shadow cursor-pointer">
+              <svg className="w-8 h-8 mx-auto text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <p className="font-semibold text-sm text-gray-900">Importar Datos</p>
+              <p className="text-xs text-gray-500 mt-0.5">Centros de votación</p>
+            </Card>
+          </Link>
+        )}
       </div>
 
       {/* Lista de clientes - SOLO SUPERADMIN */}
