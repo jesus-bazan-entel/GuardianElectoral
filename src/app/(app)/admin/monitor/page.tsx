@@ -170,15 +170,46 @@ export default function MonitorPage() {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // Search personeros
-  function handleSearch(query: string) {
+  // Search personeros AND locations
+  const [locationResults, setLocationResults] = useState<{ name: string; type: string; field: string }[]>([]);
+
+  async function handleSearch(query: string) {
     setSearchQuery(query);
-    if (query.length < 2) { setSearchResults([]); return; }
+    if (query.length < 2) { setSearchResults([]); setLocationResults([]); return; }
     const q = query.toLowerCase();
-    const results = personerosOnMap.filter(
+
+    // Search personeros
+    const personeroResults = personerosOnMap.filter(
       (p) => p.full_name.toLowerCase().includes(q) || p.dni.includes(q) || (p.centro_name && p.centro_name.toLowerCase().includes(q))
     );
-    setSearchResults(results);
+    setSearchResults(personeroResults);
+
+    // Search locations (departments, provinces, districts)
+    const { data: locData } = await supabase
+      .from("voting_centers")
+      .select("department, province, district")
+      .or(`department.ilike.%${query}%,province.ilike.%${query}%,district.ilike.%${query}%`)
+      .limit(50);
+
+    if (locData) {
+      const seen = new Set<string>();
+      const locs: { name: string; type: string; field: string }[] = [];
+      locData.forEach((d) => {
+        if (d.department.toLowerCase().includes(q) && !seen.has(`dep-${d.department}`)) {
+          seen.add(`dep-${d.department}`);
+          locs.push({ name: d.department, type: "Departamento", field: "department" });
+        }
+        if (d.province.toLowerCase().includes(q) && !seen.has(`prov-${d.province}`)) {
+          seen.add(`prov-${d.province}`);
+          locs.push({ name: `${d.province}, ${d.department}`, type: "Provincia", field: "province" });
+        }
+        if (d.district.toLowerCase().includes(q) && !seen.has(`dist-${d.district}-${d.province}`)) {
+          seen.add(`dist-${d.district}-${d.province}`);
+          locs.push({ name: `${d.district}, ${d.province}`, type: "Distrito", field: "district" });
+        }
+      });
+      setLocationResults(locs.slice(0, 8));
+    }
   }
 
   function flyToPersonero(p: PersoneroOnMap) {
@@ -186,9 +217,9 @@ export default function MonitorPage() {
     setShowSearch(false);
     setSearchQuery("");
     setSearchResults([]);
+    setLocationResults([]);
   }
 
-  // Location zoom presets
   async function zoomToLocation(type: "peru" | "department" | "province" | "district", name?: string) {
     if (type === "peru") {
       setFlyTo({ lat: -9.19, lng: -75.015, zoom: 6 });
@@ -196,24 +227,31 @@ export default function MonitorPage() {
       return;
     }
     if (!name) return;
-    // Search voting_centers for the location to get center coordinates
+
+    // Extract just the first part if "District, Province" format
+    const searchName = name.split(",")[0].trim();
     const field = type === "department" ? "department" : type === "province" ? "province" : "district";
     const { data } = await supabase
       .from("voting_centers")
       .select("latitude, longitude")
-      .ilike(field, name)
+      .ilike(field, `%${searchName}%`)
       .not("latitude", "is", null)
-      .limit(100);
+      .limit(200);
 
     if (data && data.length > 0) {
       const lats = data.map((d) => Number(d.latitude)).filter(Boolean);
       const lngs = data.map((d) => Number(d.longitude)).filter(Boolean);
-      const avgLat = lats.reduce((s, v) => s + v, 0) / lats.length;
-      const avgLng = lngs.reduce((s, v) => s + v, 0) / lngs.length;
-      const zoomLevel = type === "department" ? 8 : type === "province" ? 10 : 13;
-      setFlyTo({ lat: avgLat, lng: avgLng, zoom: zoomLevel });
+      if (lats.length > 0) {
+        const avgLat = lats.reduce((s, v) => s + v, 0) / lats.length;
+        const avgLng = lngs.reduce((s, v) => s + v, 0) / lngs.length;
+        const zoomLevel = type === "department" ? 8 : type === "province" ? 10 : 13;
+        setFlyTo({ lat: avgLat, lng: avgLng, zoom: zoomLevel });
+      }
     }
     setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setLocationResults([]);
   }
 
   const checkedInCount = personerosOnMap.filter((p) => p.has_checkin).length;
@@ -393,21 +431,37 @@ export default function MonitorPage() {
               ))}
             </div>
 
-            {/* District search */}
-            {searchQuery.length >= 2 && searchResults.length === 0 && (
-              <div className="px-3 pb-2">
-                <button
-                  onClick={() => zoomToLocation("district", searchQuery)}
-                  className="w-full text-left text-xs bg-purple-50 text-purple-700 px-3 py-2 rounded-lg hover:bg-purple-100"
-                >
-                  Buscar distrito: <strong>{searchQuery}</strong> en el mapa
-                </button>
+            {/* Location results */}
+            {locationResults.length > 0 && (
+              <div className="border-t border-gray-100">
+                <p className="text-[10px] text-gray-400 px-3 pt-2 uppercase tracking-wider font-semibold">Ubicaciones</p>
+                {locationResults.map((loc, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      const type = loc.field as "department" | "province" | "district";
+                      zoomToLocation(type, loc.name.split(",")[0].trim());
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-xs font-medium text-gray-900">{loc.name}</p>
+                      <p className="text-[10px] text-gray-400">{loc.type}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
 
             {/* Personero results */}
             {searchResults.length > 0 && (
-              <div className="max-h-60 overflow-y-auto border-t border-gray-100">
+              <div className="border-t border-gray-100">
+                <p className="text-[10px] text-gray-400 px-3 pt-2 uppercase tracking-wider font-semibold">Personeros</p>
+                <div className="max-h-48 overflow-y-auto">
                 {searchResults.map((p) => (
                   <button
                     key={p.id}
@@ -426,11 +480,12 @@ export default function MonitorPage() {
                     </div>
                   </button>
                 ))}
+                </div>
               </div>
             )}
 
-            {searchQuery.length >= 2 && searchResults.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-2">No se encontraron personeros</p>
+            {searchQuery.length >= 2 && searchResults.length === 0 && locationResults.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-3">Sin resultados para &ldquo;{searchQuery}&rdquo;</p>
             )}
           </div>
         )}
