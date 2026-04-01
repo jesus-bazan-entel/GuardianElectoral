@@ -154,12 +154,23 @@ export default function ActaListPage() {
       {/* Centro de Votación */}
       <Card>
         <h3 className="font-semibold text-gray-900 mb-2">Centro de Votación</h3>
-        <Input
-          placeholder="Nombre del local (ej: IE San Martín)"
-          value={centroVotacion}
-          onChange={(e) => handleCentroChange(e.target.value)}
-        />
-        <p className="text-xs text-gray-400 mt-1">Se recuerda para las próximas actas</p>
+        {session?.assigned_centro ? (
+          <div className="bg-primary-50 border border-primary-200 rounded-xl px-4 py-3">
+            <p className="text-sm font-medium text-primary-800">{session.assigned_centro}</p>
+            {session.assigned_mesa && (
+              <p className="text-xs text-primary-600 mt-0.5">Mesa asignada: {session.assigned_mesa}</p>
+            )}
+          </div>
+        ) : (
+          <>
+            <Input
+              placeholder="Nombre del local (ej: IE San Martín)"
+              value={centroVotacion}
+              onChange={(e) => handleCentroChange(e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Se recuerda para las próximas actas</p>
+          </>
+        )}
       </Card>
 
       {/* Nueva Mesa */}
