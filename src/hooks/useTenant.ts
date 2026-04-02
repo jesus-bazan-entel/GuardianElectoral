@@ -82,9 +82,25 @@ export function useTenant() {
         tenant_name?: string;
         assigned_centro?: string;
         assigned_mesa?: string;
+        assigned_voting_center_id?: string;
       };
 
       if (!result.success) return { success: false, error: result.error };
+
+      // Fetch centro coordinates if assigned
+      let centroLat: number | null = null;
+      let centroLng: number | null = null;
+      if (result.assigned_voting_center_id) {
+        const { data: centerData } = await supabase
+          .from("voting_centers")
+          .select("latitude, longitude")
+          .eq("id", result.assigned_voting_center_id)
+          .single();
+        if (centerData) {
+          centroLat = centerData.latitude ? Number(centerData.latitude) : null;
+          centroLng = centerData.longitude ? Number(centerData.longitude) : null;
+        }
+      }
 
       const sessionData: SessionInfo = {
         personero_id: result.personero_id!,
@@ -94,6 +110,8 @@ export function useTenant() {
         tenant_slug: tenant.slug,
         assigned_centro: result.assigned_centro || null,
         assigned_mesa: result.assigned_mesa || null,
+        centro_lat: centroLat,
+        centro_lng: centroLng,
       };
 
       saveSession(sessionData);

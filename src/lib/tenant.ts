@@ -19,6 +19,8 @@ export interface SessionInfo {
   tenant_slug: string;
   assigned_centro: string | null;
   assigned_mesa: string | null;
+  centro_lat: number | null;
+  centro_lng: number | null;
 }
 
 const SESSION_KEY = "ge_session";

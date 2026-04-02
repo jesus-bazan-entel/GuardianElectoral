@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { db, type LocalCheckin } from "@/lib/db/indexed-db";
 import { useTenantContext } from "@/components/TenantProvider";
+import { calculateDistance, GPS_TOLERANCE_METERS, formatDistance } from "@/lib/gps-validation";
 import type { GeoPosition } from "@/types";
 import nextDynamic from "next/dynamic";
 
@@ -56,17 +57,28 @@ export default function CheckinPage() {
   const wasManuallyAdjusted = adjustedPosition && position &&
     (adjustedPosition.lat !== position.lat || adjustedPosition.lng !== position.lng);
 
+  // Calculate distance to assigned center
+  const distanceToCentro = (finalPosition && session?.centro_lat && session?.centro_lng)
+    ? calculateDistance(finalPosition.lat, finalPosition.lng, session.centro_lat, session.centro_lng)
+    : null;
+
+  const isWithinRange = distanceToCentro !== null ? distanceToCentro <= GPS_TOLERANCE_METERS : true;
+
   async function handleCheckin(type: "checkin" | "checkout") {
     setCheckinLoading(true);
     setSuccess(null);
 
     try {
-      // Get fresh GPS if no position yet
       let pos = finalPosition;
       if (!pos) {
         pos = await requestPosition();
       }
       if (!session) throw new Error("No autenticado");
+
+      // Calculate distance at moment of checkin
+      const dist = (pos && session.centro_lat && session.centro_lng)
+        ? calculateDistance(pos.lat, pos.lng, session.centro_lat, session.centro_lng)
+        : null;
 
       const record: LocalCheckin = {
         userId: session.personero_id,
@@ -79,13 +91,20 @@ export default function CheckinPage() {
           userAgent: navigator.userAgent,
           platform: navigator.platform,
           manuallyAdjusted: !!wasManuallyAdjusted,
+          distanceToCentro: dist ? Math.round(dist) : null,
+          isWithinRange: dist ? dist <= GPS_TOLERANCE_METERS : null,
         },
         syncStatus: "pending",
       };
 
       await db.checkins.add(record);
       await loadHistory();
-      setSuccess(type === "checkin" ? "Check-in registrado" : "Check-out registrado");
+
+      if (type === "checkin" && dist !== null && dist > GPS_TOLERANCE_METERS) {
+        setSuccess(`Check-in registrado (${formatDistance(dist)} de tu centro asignado)`);
+      } else {
+        setSuccess(type === "checkin" ? "Check-in registrado" : "Check-out registrado");
+      }
 
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
@@ -207,6 +226,39 @@ export default function CheckinPage() {
           </div>
         )}
       </Card>
+
+      {/* Distance to assigned centro */}
+      {session?.assigned_centro && finalPosition && distanceToCentro !== null && (
+        <Card className={`border-2 ${isWithinRange ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isWithinRange ? "bg-green-100" : "bg-amber-100"}`}>
+              {isWithinRange ? (
+                <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              )}
+            </div>
+            <div className="flex-1">
+              <p className={`text-sm font-semibold ${isWithinRange ? "text-green-800" : "text-amber-800"}`}>
+                {isWithinRange
+                  ? `Estás en tu centro de votación`
+                  : `Estás a ${formatDistance(distanceToCentro)} de tu centro`
+                }
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">{session.assigned_centro}</p>
+              {!isWithinRange && (
+                <p className="text-[10px] text-amber-600 mt-0.5">
+                  Rango permitido: {formatDistance(GPS_TOLERANCE_METERS)}. Ajusta tu ubicación en el mapa si el GPS es impreciso.
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Success Message */}
       {success && (
