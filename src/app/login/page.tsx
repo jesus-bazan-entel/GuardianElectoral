@@ -26,7 +26,14 @@ export default function LoginPage() {
 
     const result = await login(dni.trim(), pin);
     if (result.success) {
-      router.push("/dashboard");
+      // Check if there's a redirect URL saved (e.g. from /monitor)
+      const redirect = localStorage.getItem("ge_redirect_after_login");
+      if (redirect) {
+        localStorage.removeItem("ge_redirect_after_login");
+        router.push(redirect);
+      } else {
+        router.push("/dashboard");
+      }
     } else {
       setError(result.error || "Error al iniciar sesión");
     }
